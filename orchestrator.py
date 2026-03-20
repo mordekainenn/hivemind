@@ -722,7 +722,7 @@ class OrchestratorManager:
         active = sum(
             1
             for s in self.agent_states.values()
-            if isinstance(s, dict) and s.get("state") == "working"
+            if isinstance(s, dict) and s.get("state") in ("working", "waiting")
         )
         total_tasks = 0
         completed_tasks = 0
@@ -773,7 +773,7 @@ class OrchestratorManager:
         for name, state in list(
             self.agent_states.items()
         ):  # snapshot prevents RuntimeError if dict is modified concurrently
-            if state.get("state") == "working" and name != "orchestrator":
+            if state.get("state") in ("working", "waiting") and name != "orchestrator":
                 affected_agent = name
                 break
 
@@ -1519,6 +1519,29 @@ class OrchestratorManager:
             forge_dir = Path(self.project_dir) / ".hivemind"
             forge_dir.mkdir(parents=True, exist_ok=True)
 
+            # ── Fetch per-project budget (mirrors legacy path logic) ──
+            try:
+                project_budget = await self.session_mgr.get_project_budget(self.project_id)
+                if project_budget > 0:
+                    self._effective_budget = min(MAX_BUDGET_USD, project_budget)
+                else:
+                    self._effective_budget = MAX_BUDGET_USD
+            except Exception as _budget_err:
+                logger.debug(
+                    "[%s] non-fatal: could not fetch project budget: %s",
+                    self.project_id,
+                    _budget_err,
+                )
+                self._effective_budget = MAX_BUDGET_USD
+
+            # Reset budget warning flag for new DAG session
+            self._budget_warning_sent = False
+
+            # Reset session state (mirrors legacy path resets)
+            self.shared_context = []
+            self._completed_rounds = []
+            self._agents_used = set()
+
             # ── Step 0: Load project context ──
             self.agent_states["orchestrator"] = {
                 "state": "working",
@@ -2068,9 +2091,9 @@ class OrchestratorManager:
                 _dag_exit_reason = "cancelled"
                 # Log agent state snapshot at cancellation for debugging
                 _working_agents = [
-                    f"{name}(task={st.get('task', '?')[:60]}, cost=${st.get('cost', 0):.4f}, turns={st.get('turns', 0)})"
+                    f"{name}[{st.get('state')}](task={st.get('task', '?')[:60]}, cost=${st.get('cost', 0):.4f}, turns={st.get('turns', 0)})"
                     for name, st in self.agent_states.items()
-                    if st.get("state") == "working"
+                    if st.get("state") in ("working", "waiting")
                 ]
                 _working_tasks = [
                     f"{tid}={tstat}"
@@ -2126,9 +2149,9 @@ class OrchestratorManager:
             )
             # Log the full state snapshot at crash time for post-mortem debugging
             _working_agents = [
-                f"{name}(task={st.get('task', '?')[:60]}, cost=${st.get('cost', 0):.4f}, turns={st.get('turns', 0)}, duration={st.get('duration', 0):.1f}s)"
+                f"{name}[{st.get('state')}](task={st.get('task', '?')[:60]}, cost=${st.get('cost', 0):.4f}, turns={st.get('turns', 0)}, duration={st.get('duration', 0):.1f}s)"
                 for name, st in self.agent_states.items()
-                if st.get("state") == "working"
+                if st.get("state") in ("working", "waiting")
             ]
             _all_agent_states = [
                 f"{name}={st.get('state', '?')}" for name, st in self.agent_states.items()
@@ -2199,10 +2222,10 @@ class OrchestratorManager:
                     f"Marking still-working agents as error/cancelled."
                 )
 
-            # Emit agent_finished for ALL agents still in 'working' state
-            # so the frontend never shows stale ACTIVE cards after task ends.
+            # Emit agent_finished for ALL agents still in 'working' or 'waiting' state
+            # so the frontend never shows stale ACTIVE/WAITING cards after task ends.
             for agent_name, agent_state in list(self.agent_states.items()):
-                if agent_state.get("state") == "working":
+                if agent_state.get("state") in ("working", "waiting"):
                     # Find the task_id for this agent from dag_task_statuses
                     task_id = None
                     for tid, tstat in self._dag_task_statuses.items():
@@ -2894,9 +2917,8 @@ class OrchestratorManager:
                     turn=self.turn_count,
                     max_turns=MAX_TURNS_PER_CYCLE,
                     cost=self.total_cost_usd,
-                    max_budget=MAX_BUDGET_USD,
+                    max_budget=self._effective_budget,
                 )
-
                 await self._notify(
                     f"{AGENT_EMOJI.get('orchestrator', '🔄')} Turn {self.turn_count}/{MAX_TURNS_PER_CYCLE} — "
                     f"*orchestrator* is {'planning & delegating' if self.multi_agent else 'working'}..."
@@ -3301,7 +3323,7 @@ class OrchestratorManager:
                 # Mark orchestrator as "waiting" while sub-agents work
                 agent_names = list({d.agent for d in delegations})
                 self.agent_states["orchestrator"] = {
-                    "state": "idle",
+                    "state": "waiting",
                     "task": f"waiting for {', '.join(agent_names)}",
                 }
                 await self._emit_event(
@@ -3519,9 +3541,9 @@ class OrchestratorManager:
             logger.error(f"Orchestrator loop error: {e}", exc_info=True)
             # Full state dump for post-mortem debugging
             _working_agents = [
-                f"{name}(task={st.get('task', '?')[:60]}, cost=${st.get('cost', 0):.4f}, turns={st.get('turns', 0)})"
+                f"{name}[{st.get('state')}](task={st.get('task', '?')[:60]}, cost=${st.get('cost', 0):.4f}, turns={st.get('turns', 0)})"
                 for name, st in self.agent_states.items()
-                if st.get("state") == "working"
+                if st.get("state") in ("working", "waiting")
             ]
             _all_agent_states = [
                 f"{name}={st.get('state', '?')}" for name, st in self.agent_states.items()
@@ -3655,10 +3677,10 @@ class OrchestratorManager:
             if not self.is_paused:
                 self.is_running = False
 
-            # Emit agent_finished for ALL agents still in 'working' state
-            # so the frontend never shows stale ACTIVE cards after task ends.
+            # Emit agent_finished for ALL agents still in 'working' or 'waiting' state
+            # so the frontend never shows stale ACTIVE/WAITING cards after task ends.
             for agent_name, agent_state in list(self.agent_states.items()):
-                if agent_state.get("state") == "working":
+                if agent_state.get("state") in ("working", "waiting"):
                     task_id = None
                     for tid, tstat in self._dag_task_statuses.items():
                         if tstat == "working":

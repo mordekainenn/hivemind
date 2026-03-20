@@ -73,7 +73,7 @@ async def _silence_watchdog_loop(mgr: OrchestratorManager) -> None:
 
             now = time.time()
             for agent_name, state in list(mgr.agent_states.items()):
-                if state.get("state") != "working":
+                if state.get("state") not in ("working", "waiting"):
                     mgr._silence_alerted.discard(agent_name)
                     continue
 
@@ -104,7 +104,7 @@ async def _silence_watchdog_loop(mgr: OrchestratorManager) -> None:
             _working_agents = [
                 (name, st)
                 for name, st in list(mgr.agent_states.items())
-                if st.get("state") == "working"
+                if st.get("state") in ("working", "waiting")
             ]
             if _working_agents and mgr.is_running:
                 _all_critical = all(
@@ -303,7 +303,8 @@ def detect_stuck(mgr: OrchestratorManager) -> dict | None:
 
     # --- Signal 5: cost runaway without progress ---
     if mgr._current_loop >= 5 and mgr.total_cost_usd > 0:
-        budget_used_pct = mgr.total_cost_usd / MAX_BUDGET_USD
+        effective = getattr(mgr, "_effective_budget", MAX_BUDGET_USD) or MAX_BUDGET_USD
+        budget_used_pct = mgr.total_cost_usd / effective
         progress_pct = mgr._current_loop / MAX_ORCHESTRATOR_LOOPS
         if budget_used_pct > 0.5 and progress_pct < 0.25:
             logger.warning(
