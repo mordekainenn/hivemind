@@ -165,7 +165,57 @@ async def get_settings():
         "max_user_message_length": cfg.MAX_USER_MESSAGE_LENGTH,
         "session_expiry_hours": cfg.SESSION_EXPIRY_HOURS,
         "max_orchestrator_loops": cfg.MAX_ORCHESTRATOR_LOOPS,
+        "llm_providers": _get_llm_provider_info(),
     }
+
+
+def _get_llm_provider_info():
+    """Get LLM provider configuration info for the frontend."""
+    try:
+        from src.llm_providers import LLM_PROVIDER_CONFIGS
+
+        providers = {}
+        for name, config in LLM_PROVIDER_CONFIGS.items():
+            providers[name] = {
+                "name": config.name,
+                "enabled": config.enabled,
+                "has_api_key": bool(config.api_key),
+                "default_model": config.default_model,
+                "base_url": config.base_url,
+            }
+        return providers
+    except ImportError:
+        return {}
+
+
+@router.get("/api/providers")
+async def get_provider_status():
+    """Get detailed provider status including health checks."""
+    try:
+        from src.llm_providers import initialize_providers, get_provider_registry
+        from src.llm_providers.cost_tracker import get_cost_tracker
+
+        initialize_providers()
+        registry = get_provider_registry()
+
+        health = await registry.health_check_all()
+        cost_tracker = get_cost_tracker()
+
+        return {
+            "providers": {
+                name: {
+                    "available": registry.is_available(name),
+                    "healthy": health.get(name, False),
+                }
+                for name in registry.list_providers()
+            },
+            "cost": {
+                "session_total": cost_tracker.get_session_total(),
+                "provider_breakdown": cost_tracker.get_provider_breakdown(),
+            },
+        }
+    except Exception as e:
+        return {"error": str(e), "providers": {}, "cost": {}}
 
 
 @router.put("/api/settings")

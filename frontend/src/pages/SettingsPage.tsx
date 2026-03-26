@@ -4,6 +4,7 @@ import { SettingsSkeleton } from '../components/Skeleton';
 import ErrorState from '../components/ErrorState';
 import { useToast } from '../components/Toast';
 import type { Settings, NumericSettingsKey } from '../types';
+import LlmProvidersTab from '../components/Settings/LlmProvidersTab';
 
 interface ApprovedDevice {
   device_id: string;
@@ -57,6 +58,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<'general' | 'providers'>('general');
   const toast = useToast();
 
   const loadSettings = () => {
@@ -148,8 +150,38 @@ export default function SettingsPage() {
         </div>
       </header>
 
+      {/* Tabs */}
+      <div className="max-w-2xl mx-auto px-4 sm:px-6">
+        <div className="flex gap-1 p-1 mt-2 rounded-xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-dim)' }}>
+          <button
+            onClick={() => setActiveTab('general')}
+            className="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all"
+            style={{
+              background: activeTab === 'general' ? 'var(--accent, #636cff)' : 'transparent',
+              color: activeTab === 'general' ? 'white' : 'var(--text-secondary)',
+            }}
+          >
+            General
+          </button>
+          <button
+            onClick={() => setActiveTab('providers')}
+            className="flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all"
+            style={{
+              background: activeTab === 'providers' ? 'var(--accent, #636cff)' : 'transparent',
+              color: activeTab === 'providers' ? 'white' : 'var(--text-secondary)',
+            }}
+          >
+            LLM Providers
+          </button>
+        </div>
+      </div>
+
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-5">
-        {EDITABLE_FIELDS.map(section => (
+        {activeTab === 'providers' ? (
+          <LlmProvidersTab />
+        ) : (
+          <>
+            {EDITABLE_FIELDS.map(section => (
           <div
             key={section.title}
             className="rounded-2xl overflow-hidden"
@@ -226,7 +258,7 @@ export default function SettingsPage() {
         <DeviceManagement />
 
         {/* Save button - sticky */}
-        {hasChanges && (
+        {hasChanges && activeTab !== 'providers' && (
           <div
             className="sticky bottom-4 flex items-center justify-center"
             style={{ animation: 'slideUp 0.3s ease-out' }}
