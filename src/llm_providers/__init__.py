@@ -29,6 +29,7 @@ from .cost_tracker import (
     get_cost_tracker,
     PRICING,
 )
+from .adapter import LLMRuntimeAdapter
 
 __all__ = [
     "LLMProvider",
@@ -54,4 +55,5 @@ __all__ = [
     "CostTracker",
     "get_cost_tracker",
     "PRICING",
+    "LLMRuntimeAdapter",
 ]

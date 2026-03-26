@@ -576,6 +576,29 @@ AVAILABLE_RUNTIMES: dict[str, AgentRuntime] = {
     "http": HTTPRuntime(),
 }
 
+_llm_runtimes_initialized = False
+
+
+def _ensure_llm_runtimes() -> None:
+    global _llm_runtimes_initialized
+    if _llm_runtimes_initialized:
+        return
+
+    try:
+        from src.llm_providers import initialize_providers, LLM_PROVIDER_CONFIGS
+        from src.llm_providers.adapter import LLMRuntimeAdapter
+
+        initialize_providers()
+
+        for provider_name in LLM_PROVIDER_CONFIGS.keys():
+            AVAILABLE_RUNTIMES[provider_name] = LLMRuntimeAdapter(provider_name)
+            logger.info(f"Registered LLM runtime: {provider_name}")
+
+        _llm_runtimes_initialized = True
+    except Exception as e:
+        logger.warning(f"Failed to initialize LLM runtimes: {e}")
+
+
 # Default runtime
 _DEFAULT_RUNTIME: str = os.getenv("AGENT_RUNTIME_DEFAULT", "claude_code")
 
@@ -596,6 +619,8 @@ def get_runtime(role: str = "") -> AgentRuntime:
     2. Default runtime from AGENT_RUNTIME_DEFAULT
     3. Claude Code (hardcoded fallback)
     """
+    _ensure_llm_runtimes()
+
     runtime_key = _RUNTIME_MAP.get(role, _DEFAULT_RUNTIME)
 
     if runtime_key not in AVAILABLE_RUNTIMES:
