@@ -140,6 +140,20 @@ def initialize_providers() -> None:
             ),
         )
 
+    if "minimax" in LLM_PROVIDER_CONFIGS:
+        from .minimax_runtime import MinimaxRuntime
+
+        config = LLM_PROVIDER_CONFIGS["minimax"]
+        registry.register(
+            "minimax",
+            MinimaxRuntime(
+                api_key=config.api_key,
+                base_url=config.base_url,
+                default_model=config.default_model,
+                timeout=config.timeout,
+            ),
+        )
+
     logger.info(f"Initialized {len(registry.list_providers())} LLM providers")
 
 

@@ -71,6 +71,18 @@ def load_provider_configs() -> dict[str, ProviderConfig]:
             timeout=int(os.getenv("GEMINI_TIMEOUT", "180")),
         )
 
+    minimax_key = os.getenv("MINIMAX_API_KEY", "")
+    if minimax_key:
+        configs["minimax"] = ProviderConfig(
+            name="MiniMax",
+            provider_type="minimax",
+            enabled=True,
+            api_key=minimax_key,
+            base_url=os.getenv("MINIMAX_BASE_URL", "https://api.minimax.io/anthropic/v1"),
+            default_model=os.getenv("MINIMAX_DEFAULT_MODEL", "MiniMax-M2.5"),
+            timeout=int(os.getenv("MINIMAX_TIMEOUT", "180")),
+        )
+
     return configs
 
 
