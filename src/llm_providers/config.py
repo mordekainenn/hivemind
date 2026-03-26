@@ -5,6 +5,10 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 @dataclass
 class ProviderConfig:

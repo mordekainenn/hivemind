@@ -172,10 +172,11 @@ async def get_settings():
 def _get_llm_provider_info():
     """Get LLM provider configuration info for the frontend."""
     try:
-        from src.llm_providers import LLM_PROVIDER_CONFIGS
+        import src.llm_providers.config as llm_config
+        import src.llm_providers.cost_tracker as cost_tracker
 
         providers = {}
-        for name, config in LLM_PROVIDER_CONFIGS.items():
+        for name, config in llm_config.LLM_PROVIDER_CONFIGS.items():
             providers[name] = {
                 "name": config.name,
                 "enabled": config.enabled,
@@ -183,9 +184,16 @@ def _get_llm_provider_info():
                 "default_model": config.default_model,
                 "base_url": config.base_url,
             }
+
+        ct = cost_tracker.get_cost_tracker()
+        providers["_cost"] = {
+            "session_total": ct.get_session_total(),
+            "provider_breakdown": ct.get_provider_breakdown(),
+        }
+
         return providers
-    except ImportError:
-        return {}
+    except ImportError as e:
+        return {"_error": str(e)}
 
 
 @router.get("/api/providers")

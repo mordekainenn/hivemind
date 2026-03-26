@@ -217,6 +217,8 @@ def create_app() -> FastAPI:
         "/api/auth/verify",
         "/api/auth/status",
         "/api/agent-registry",
+        "/api/settings",
+        "/api/providers",
     }
 
     @app.middleware("http")
