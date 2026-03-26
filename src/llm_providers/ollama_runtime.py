@@ -259,26 +259,67 @@ class OllamaRuntime:
         budget_usd: float = 50.0,
         context_files: list[str] | None = None,
         working_dir: str = "",
+        tool_executor: callable = None,
     ) -> tuple[str, list[ToolUse]]:
+        """Execute with tool calling loop.
+
+        Args:
+            tool_executor: Async callable(tool_name, tool_input) -> tool_result
+                           If not provided, returns tool calls without executing.
+        """
         tool_defs = {t.name: t for t in tools}
 
         tool_prompt = self._build_tool_prompt(tool_defs)
         full_prompt = f"{tool_prompt}\n\n{prompt}"
 
-        response = await self.execute(
-            full_prompt,
-            model=model,
-            system_prompt=system_prompt,
-            max_turns=max_turns,
-            timeout=timeout,
-            budget_usd=budget_usd,
-            context_files=context_files,
-            working_dir=working_dir,
-        )
+        all_tool_calls = []
+        conversation_history = []
+        current_prompt = full_prompt
 
-        tool_calls = self._parse_tool_calls(response.get("result_text", ""), tool_defs)
+        for turn in range(max_turns):
+            response = await self.execute(
+                current_prompt,
+                model=model,
+                system_prompt=system_prompt,
+                max_turns=1,
+                timeout=timeout,
+                budget_usd=budget_usd,
+                context_files=context_files,
+                working_dir=working_dir,
+            )
 
-        return response.get("result_text", ""), tool_calls
+            response_text = response.get("result_text", "")
+            conversation_history.append(response_text)
+
+            tool_calls = self._parse_tool_calls(response_text, tool_defs)
+
+            if not tool_calls:
+                break
+
+            all_tool_calls.extend(tool_calls)
+
+            if tool_executor is None:
+                break
+
+            tool_results = []
+            for tc in tool_calls:
+                try:
+                    result = await tool_executor(tc.name, tc.input)
+                    tool_results.append(f"[{tc.name}]: {result}")
+                except Exception as e:
+                    tool_results.append(f"[{tc.name}]: Error: {str(e)}")
+
+            current_prompt = (
+                full_prompt
+                + "\n\n"
+                + "\n".join(conversation_history)
+                + "\n\n"
+                + "\n".join(tool_results)
+            )
+
+        final_text = "\n".join(conversation_history)
+
+        return final_text, all_tool_calls
 
     async def list_models(self) -> list[str]:
         try:
@@ -321,29 +362,30 @@ To use a tool, output a JSON object in this format:
 {{"tool": "tool_name", "input": {{"param1": "value1"}}}}"""
 
     def _parse_tool_calls(self, text: str, tools: dict[str, ToolDefinition]) -> list[ToolUse]:
+        import re
+        import json
+
         tool_calls = []
 
-        import re
-
-        pattern = r'\{[^{}]*"tool"\s*:\s*"([^"]+)"[^{}]*\}'
-        matches = re.findall(pattern, text)
-
-        for match in matches:
-            if match in tools:
+        try:
+            possible_starts = [m.start() for m in re.finditer(r"\{", text)]
+            for start in possible_starts:
                 try:
-                    json_match = re.search(
-                        r'\{"tool"\s*:\s*"' + re.escape(match) + r'"[^{}]*\}', text
-                    )
-                    if json_match:
-                        tool_data = json.loads(json_match.group())
-                        tool_calls.append(
-                            ToolUse(
-                                name=tool_data.get("tool", ""),
-                                input=tool_data.get("input", {}),
-                                id=tool_data.get("id", ""),
+                    candidate = text[start:]
+                    data = json.loads(candidate)
+                    if isinstance(data, dict) and "tool" in data and "input" in data:
+                        if data["tool"] in tools:
+                            tool_calls.append(
+                                ToolUse(
+                                    name=data["tool"],
+                                    input=data["input"],
+                                    id=data.get("id", ""),
+                                )
                             )
-                        )
-                except (json.JSONDecodeError, KeyError):
+                            break
+                except (json.JSONDecodeError, KeyError, IndexError):
                     continue
+        except Exception:
+            pass
 
         return tool_calls

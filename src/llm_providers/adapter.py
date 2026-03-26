@@ -1,12 +1,44 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 from typing import Any, TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from agent_runtime import RuntimeResponse, StreamEvent
+
+
+HIVEMIND_TOOL_EXECUTORS = {
+    "bash": lambda inp: _run_bash(inp.get("command", "")),
+    "read_file": lambda inp: _read_file(inp.get("path", "")),
+    "grep": lambda inp: _run_bash(
+        f"grep -r {inp.get('pattern', '')} {inp.get('path', '.')} 2>/dev/null | head -50"
+    ),
+    "glob": lambda inp: _run_bash(
+        f"find {inp.get('path', '.')} -maxdepth 3 -name '{inp.get('pattern', '*')}' 2>/dev/null | head -50"
+    ),
+}
+
+
+def _run_bash(cmd: str, timeout: int = 10) -> str:
+    try:
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        output = result.stdout if result.stdout else result.stderr
+        return output if output else "(command completed with no output)"
+    except subprocess.TimeoutExpired:
+        return f"Command timed out after {timeout}s"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+def _read_file(path: str) -> str:
+    try:
+        with open(path, "r") as f:
+            return f.read()[:10000]
+    except Exception as e:
+        return f"Error reading file: {e}"
 
 
 class LLMRuntimeAdapter:
@@ -136,3 +168,117 @@ class LLMRuntimeAdapter:
 
     async def shutdown(self) -> None:
         pass
+
+    async def execute_with_tools(
+        self,
+        prompt: str,
+        allowed_tools: list[str] | None = None,
+        *,
+        working_dir: str = "",
+        role: str = "",
+        max_turns: int = 100,
+        timeout: int = 900,
+        budget_usd: float = 50.0,
+        system_prompt: str = "",
+        context_files: list[str] | None = None,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Execute with tool calling support.
+
+        For Ollama: Uses prompt-based tool loop
+        For OpenAI/Anthropic: Uses native function calling
+        """
+        self._ensure_registry()
+
+        from src.llm_providers import initialize_providers
+
+        initialize_providers()
+
+        from src.llm_providers.base import ToolDefinition
+
+        if allowed_tools is None:
+            allowed_tools = list(HIVEMIND_TOOL_EXECUTORS.keys())
+
+        tools = [
+            ToolDefinition(
+                name=name,
+                description=_get_tool_description(name),
+                parameters=_get_tool_schema(name),
+            )
+            for name in allowed_tools
+            if name in HIVEMIND_TOOL_EXECUTORS
+        ]
+
+        if not tools:
+            result = await self.execute(
+                prompt,
+                working_dir=working_dir,
+                role=role,
+                max_turns=max_turns,
+                timeout=timeout,
+                budget_usd=budget_usd,
+                allowed_tools=allowed_tools,
+                system_prompt=system_prompt,
+                context_files=context_files,
+            )
+            return result.result_text, []
+
+        provider = self._registry.get(self.provider_name)
+        model = self._get_role_model(role, self.provider_name) if role else provider.default_model
+
+        tool_executor = HIVEMIND_TOOL_EXECUTORS
+
+        async def execute_tool(tool_name: str, tool_input: dict) -> str:
+            if tool_name in tool_executor:
+                return tool_executor[tool_name](tool_input)
+            return f"Unknown tool: {tool_name}"
+
+        result_text, tool_calls = await provider.execute_with_tools(
+            prompt=prompt,
+            tools=tools,
+            model=model,
+            system_prompt=system_prompt,
+            max_turns=max_turns,
+            timeout=timeout,
+            budget_usd=budget_usd,
+            context_files=context_files,
+            working_dir=working_dir,
+            tool_executor=execute_tool,
+        )
+
+        return result_text, [{"name": tc.name, "input": tc.input, "id": tc.id} for tc in tool_calls]
+
+
+def _get_tool_description(name: str) -> str:
+    desc = {
+        "bash": "Execute a bash command in the terminal",
+        "read_file": "Read contents of a file",
+        "grep": "Search for a pattern in files",
+        "glob": "Find files matching a glob pattern",
+    }
+    return desc.get(name, f"Tool: {name}")
+
+
+def _get_tool_schema(name: str) -> dict:
+    schemas = {
+        "bash": {
+            "type": "object",
+            "properties": {"command": {"type": "string"}},
+            "required": ["command"],
+        },
+        "read_file": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"],
+        },
+        "grep": {
+            "type": "object",
+            "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}},
+            "required": ["pattern"],
+        },
+        "glob": {
+            "type": "object",
+            "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}},
+            "required": ["pattern"],
+        },
+    }
+    return schemas.get(name, {"type": "object", "properties": {}})
