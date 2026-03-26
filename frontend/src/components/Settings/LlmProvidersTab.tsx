@@ -51,6 +51,8 @@ export default function LlmProvidersTab() {
   const [data, setData] = useState<LlmProvidersData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({});
+  const [availableModels, setAvailableModels] = useState<Record<string, string[]>>({});
   const toast = useToast();
 
   const loadData = () => {
@@ -60,6 +62,23 @@ export default function LlmProvidersTab() {
       .then(setData)
       .catch(() => setError('Failed to load provider data'))
       .finally(() => setLoading(false));
+  };
+
+  const loadModels = (provider: string) => {
+    if (availableModels[provider] || loadingModels[provider]) return;
+    
+    setLoadingModels(prev => ({ ...prev, [provider]: true }));
+    fetch(`/api/providers/${provider}/models`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.models) {
+          setAvailableModels(prev => ({ ...prev, [provider]: data.models }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        setLoadingModels(prev => ({ ...prev, [provider]: false }));
+      });
   };
 
   useEffect(() => {
@@ -86,8 +105,11 @@ export default function LlmProvidersTab() {
     );
   }
 
-  const providers = data?.providers || {};
-  const cost = data?.cost || { session_total: 0, provider_breakdown: {} };
+  const providers = data?.llm_providers || {};
+  const cost = data?.llm_providers?._cost || { session_total: 0, provider_breakdown: {} };
+  
+  // Filter out the _cost key from providers display
+  const providerList = Object.entries(providers).filter(([k]) => !k.startsWith('_'));
 
   return (
     <div className="space-y-6">
@@ -111,7 +133,7 @@ export default function LlmProvidersTab() {
               this session
             </span>
           </div>
-          {Object.keys(cost.provider_breakdown).length > 0 && (
+          {Object.keys(cost.provider_breakdown || {}).length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {Object.entries(cost.provider_breakdown).map(([provider, amount]) => (
                 <span
@@ -139,42 +161,78 @@ export default function LlmProvidersTab() {
           </h2>
         </div>
         <div className="divide-y" style={{ borderColor: 'var(--border-dim)' }}>
-          {Object.entries(providers).map(([key, provider]) => (
-            <div key={key} className="px-5 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
-                  style={{ 
-                    background: `${PROVIDER_COLORS[key] || '#6366f1'}20`,
-                    boxShadow: `0 0 12px ${PROVIDER_COLORS[key] || '#6366f1'}30`
-                  }}
-                >
-                  {PROVIDER_ICONS[key] || '❓'}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                      {provider.name}
-                    </span>
-                    {provider.has_api_key ? (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
-                        Configured
-                      </span>
-                    ) : (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
-                        No API Key
-                      </span>
-                    )}
+          {providerList.map(([key, provider]) => (
+            <div key={key} className="px-5 py-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
+                    style={{ 
+                      background: `${PROVIDER_COLORS[key] || '#6366f1'}20`,
+                      boxShadow: `0 0 12px ${PROVIDER_COLORS[key] || '#6366f1'}30`
+                    }}
+                  >
+                    {PROVIDER_ICONS[key] || '❓'}
                   </div>
-                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                    {provider.default_model || 'default model'}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                        {provider.name}
+                      </span>
+                    {provider.has_api_key ? (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
+                          Configured
+                        </span>
+                      ) : provider.name === 'Ollama' ? (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
+                          Local
+                        </span>
+                      ) : (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
+                          No API Key
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {provider.base_url}
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {provider.base_url}
-                </div>
+              
+              {/* Model selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Model:</span>
+                <button
+                  onClick={() => loadModels(key)}
+                  className="flex-1 text-left px-3 py-1.5 text-sm rounded-lg border"
+                  style={{ 
+                    background: 'var(--bg-elevated)', 
+                    borderColor: 'var(--border-subtle)',
+                    color: 'var(--text-primary)'
+                  }}
+                >
+                  {provider.default_model || 'Select model...'}
+                  {loadingModels[key] && <span className="ml-2 text-xs text-gray-400">(loading...)</span>}
+                </button>
+                {availableModels[key] && availableModels[key].length > 0 && (
+                  <select
+                    className="px-2 py-1.5 text-xs rounded-lg border"
+                    style={{ 
+                      background: 'var(--bg-elevated)', 
+                      borderColor: 'var(--border-subtle)',
+                      color: 'var(--text-primary)'
+                    }}
+                    value={provider.default_model}
+                    onChange={(e) => {
+                      console.log(`Selected ${key} model: ${e.target.value}`);
+                    }}
+                  >
+                    {availableModels[key].map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
           ))}

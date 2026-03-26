@@ -29,11 +29,13 @@ def load_provider_configs() -> dict[str, ProviderConfig]:
     configs = {}
 
     ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    ollama_key = os.getenv("OLLAMA_API_KEY", "")
     if os.getenv("OLLAMA_ENABLED", "true").lower() == "true":
         configs["ollama"] = ProviderConfig(
             name="Ollama",
             provider_type="ollama",
             enabled=True,
+            api_key=ollama_key,
             base_url=ollama_host,
             default_model=os.getenv("OLLAMA_DEFAULT_MODEL", "llama3:latest"),
             timeout=int(os.getenv("OLLAMA_TIMEOUT", "180")),
@@ -133,6 +135,11 @@ try:
     ROLE_MODEL_MAP["gemini"] = json.loads(_GEMINI_MODEL_RAW)
 except (json.JSONDecodeError, TypeError):
     pass
+
+BRAIN_LAYER_RUNTIME = os.getenv("BRAIN_LAYER_RUNTIME", "claude_code")
+BRAIN_LAYER_MODEL = os.getenv("BRAIN_LAYER_MODEL", "")
+EXECUTION_LAYER_RUNTIME = os.getenv("EXECUTION_LAYER_RUNTIME", "claude_code")
+EXECUTION_LAYER_MODEL = os.getenv("EXECUTION_LAYER_MODEL", "")
 
 
 def get_role_runtime(role: str) -> str:

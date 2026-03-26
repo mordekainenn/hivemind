@@ -226,6 +226,26 @@ async def get_provider_status():
         return {"error": str(e), "providers": {}, "cost": {}}
 
 
+@router.get("/api/providers/{provider}/models")
+async def get_provider_models(provider: str):
+    """Get available models for a specific provider."""
+    try:
+        from src.llm_providers import initialize_providers, get_provider_registry
+
+        initialize_providers()
+        registry = get_provider_registry()
+
+        if not registry.is_available(provider):
+            return {"error": f"Provider {provider} not available", "models": []}
+
+        provider_instance = registry.get(provider)
+        models = await provider_instance.list_models()
+
+        return {"models": models}
+    except Exception as e:
+        return {"error": str(e), "models": []}
+
+
 @router.put("/api/settings")
 async def update_settings(req: UpdateSettingsRequest):
     """Update editable settings (runtime only, does not persist to .env)."""

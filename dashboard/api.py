@@ -218,7 +218,11 @@ def create_app() -> FastAPI:
         "/api/auth/status",
         "/api/agent-registry",
         "/api/settings",
-        "/api/providers",
+        "/api/providers/ollama/models",
+        "/api/providers/openai/models",
+        "/api/providers/anthropic/models",
+        "/api/providers/gemini/models",
+        "/api/providers/minimax/models",
     }
 
     @app.middleware("http")

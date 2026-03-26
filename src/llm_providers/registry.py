@@ -4,34 +4,59 @@ import logging
 from typing import Any
 
 from .base import LLMProvider, ProviderError
-from .config import LLM_PROVIDER_CONFIGS, get_role_model, get_role_runtime
+from .config import (
+    LLM_PROVIDER_CONFIGS,
+    get_role_model,
+    get_role_runtime,
+    BRAIN_LAYER_RUNTIME,
+    BRAIN_LAYER_MODEL,
+    EXECUTION_LAYER_RUNTIME,
+    EXECUTION_LAYER_MODEL,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def get_role_runtime_from_config(role: str) -> str:
-    """Get runtime for a role from config.py AGENT_REGISTRY."""
+    """Get runtime for a role from config.py AGENT_REGISTRY, with layer-based fallback."""
     try:
         from config import AGENT_REGISTRY
 
         if role in AGENT_REGISTRY:
-            return AGENT_REGISTRY[role].runtime
+            agent_config = AGENT_REGISTRY[role]
+            if agent_config.runtime and agent_config.runtime != "claude_code":
+                return agent_config.runtime
+
+            layer = getattr(agent_config, "layer", "execution")
+            if layer == "brain":
+                return BRAIN_LAYER_RUNTIME
+            else:
+                return EXECUTION_LAYER_RUNTIME
     except ImportError:
         pass
+
     return get_role_runtime(role)
 
 
 def get_role_model_from_config(role: str, runtime: str) -> str:
-    """Get model for a role from config.py AGENT_REGISTRY."""
+    """Get model for a role from config.py AGENT_REGISTRY, with layer-based fallback."""
     try:
         from config import AGENT_REGISTRY
 
         if role in AGENT_REGISTRY:
-            model = AGENT_REGISTRY[role].model
+            agent_config = AGENT_REGISTRY[role]
+            model = getattr(agent_config, "model", "")
             if model:
                 return model
+
+            layer = getattr(agent_config, "layer", "execution")
+            if layer == "brain" and BRAIN_LAYER_MODEL:
+                return BRAIN_LAYER_MODEL
+            elif layer == "execution" and EXECUTION_LAYER_MODEL:
+                return EXECUTION_LAYER_MODEL
     except ImportError:
         pass
+
     return get_role_model(role, runtime)
 
 
