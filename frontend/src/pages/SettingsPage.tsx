@@ -182,100 +182,102 @@ export default function SettingsPage() {
         ) : (
           <>
             {EDITABLE_FIELDS.map(section => (
-          <div
-            key={section.title}
-            className="rounded-2xl overflow-hidden"
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-dim)' }}
-          >
-            <div className="px-5 py-3.5 flex items-center gap-2.5" style={{ borderBottom: '1px solid var(--border-dim)' }}>
-              <span className="text-base">{section.icon}</span>
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{section.title}</h2>
-            </div>
-            <div>
-              {section.fields.map((field, i) => (
-                <div
-                  key={field.key}
-                  className="px-5 py-3.5 flex items-center justify-between gap-4"
-                  style={{ borderBottom: i < section.fields.length - 1 ? '1px solid var(--border-dim)' : 'none' }}
-                >
-                  <div className="min-w-0">
-                    <label htmlFor={`field-${field.key}`} className="text-sm" style={{ color: 'var(--text-primary)' }}>{field.label}</label>
-                    <div id={`desc-${field.key}`} className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{field.desc}</div>
-                  </div>
-                  <input
-                    id={`field-${field.key}`}
-                    type="number"
-                    value={draft[field.key] ?? 0}
-                    aria-label={field.label}
-                    aria-describedby={`desc-${field.key}`}
-                    onChange={(e) => {
-                      const val = field.type === 'float'
-                        ? parseFloat(e.target.value) || 0
-                        : parseInt(e.target.value) || 0;
-                      setDraft(prev => ({ ...prev, [field.key]: val }));
-                    }}
-                    min={field.min}
-                    max={field.max}
-                    step={field.type === 'float' ? 0.1 : 1}
-                    className="w-24 text-sm text-right px-2.5 py-1.5 rounded-xl focus:outline-none transition-colors"
-                    style={{
-                      background: 'var(--bg-elevated)',
-                      border: '1px solid var(--border-subtle)',
-                      color: 'var(--text-primary)',
-                      fontFamily: 'var(--font-mono)',
-                    }}
-                  />
+              <div
+                key={section.title}
+                className="rounded-2xl overflow-hidden"
+                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-dim)' }}
+              >
+                <div className="px-5 py-3.5 flex items-center gap-2.5" style={{ borderBottom: '1px solid var(--border-dim)' }}>
+                  <span className="text-base">{section.icon}</span>
+                  <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{section.title}</h2>
                 </div>
-              ))}
-            </div>
-          </div>
-        ))}
-
-        {/* Read-only info */}
-        <div
-          className="rounded-2xl overflow-hidden"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-dim)' }}
-        >
-          <div className="px-5 py-3.5 flex items-center gap-2.5" style={{ borderBottom: '1px solid var(--border-dim)' }}>
-            <span className="text-base">🔒</span>
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Read-Only</h2>
-          </div>
-          <div>
-            <div className="px-5 py-3.5 flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-sm" style={{ color: 'var(--text-primary)' }}>Session Expiry</div>
-                <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Set via SESSION_EXPIRY_HOURS env var</div>
+                <div>
+                  {section.fields.map((field, i) => (
+                    <div
+                      key={field.key}
+                      className="px-5 py-3.5 flex items-center justify-between gap-4"
+                      style={{ borderBottom: i < section.fields.length - 1 ? '1px solid var(--border-dim)' : 'none' }}
+                    >
+                      <div className="min-w-0">
+                        <label htmlFor={`field-${field.key}`} className="text-sm" style={{ color: 'var(--text-primary)' }}>{field.label}</label>
+                        <div id={`desc-${field.key}`} className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{field.desc}</div>
+                      </div>
+                      <input
+                        id={`field-${field.key}`}
+                        type="number"
+                        value={draft[field.key] ?? 0}
+                        aria-label={field.label}
+                        aria-describedby={`desc-${field.key}`}
+                        onChange={(e) => {
+                          const val = field.type === 'float'
+                            ? parseFloat(e.target.value) || 0
+                            : parseInt(e.target.value) || 0;
+                          setDraft(prev => ({ ...prev, [field.key]: val }));
+                        }}
+                        min={field.min}
+                        max={field.max}
+                        step={field.type === 'float' ? 0.1 : 1}
+                        className="w-24 text-sm text-right px-2.5 py-1.5 rounded-xl focus:outline-none transition-colors"
+                        style={{
+                          background: 'var(--bg-elevated)',
+                          border: '1px solid var(--border-subtle)',
+                          color: 'var(--text-primary)',
+                          fontFamily: 'var(--font-mono)',
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="text-xs px-2.5 py-1 rounded-lg flex-shrink-0"
-                style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                {settings.session_expiry_hours}h
-              </div>
-            </div>
-          </div>
-        </div>
+            ))}
 
-        {/* Device Management Section */}
-        <DeviceManagement />
-
-        {/* Save button - sticky */}
-        {hasChanges && activeTab !== 'providers' && (
-          <div
-            className="sticky bottom-4 flex items-center justify-center"
-            style={{ animation: 'slideUp 0.3s ease-out' }}
-          >
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-6 py-2.5 text-sm font-medium rounded-xl transition-all active:scale-95 text-white"
-              style={{
-                background: saving ? 'var(--bg-elevated)' : 'linear-gradient(135deg, var(--accent-blue), #4f6ef5)',
-                boxShadow: saving ? 'none' : '0 4px 20px var(--glow-blue)',
-                color: saving ? 'var(--text-muted)' : 'white',
-              }}
+            {/* Read-only info */}
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-dim)' }}
             >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
+              <div className="px-5 py-3.5 flex items-center gap-2.5" style={{ borderBottom: '1px solid var(--border-dim)' }}>
+                <span className="text-base">🔒</span>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Read-Only</h2>
+              </div>
+              <div>
+                <div className="px-5 py-3.5 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-sm" style={{ color: 'var(--text-primary)' }}>Session Expiry</div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Set via SESSION_EXPIRY_HOURS env var</div>
+                  </div>
+                  <div className="text-xs px-2.5 py-1 rounded-lg flex-shrink-0"
+                    style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                    {settings.session_expiry_hours}h
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Device Management Section */}
+            <DeviceManagement />
+
+            {/* Save button - sticky */}
+            {hasChanges && activeTab !== 'providers' && (
+              <div
+                className="sticky bottom-4 flex items-center justify-center"
+                style={{ animation: 'slideUp 0.3s ease-out' }}
+              >
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-6 py-2.5 text-sm font-medium rounded-xl transition-all active:scale-95 text-white"
+                  style={{
+                    background: saving ? 'var(--bg-elevated)' : 'linear-gradient(135deg, var(--accent-blue), #4f6ef5)',
+                    boxShadow: saving ? 'none' : '0 4px 20px var(--glow-blue)',
+                    color: saving ? 'var(--text-muted)' : 'white',
+                  }}
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

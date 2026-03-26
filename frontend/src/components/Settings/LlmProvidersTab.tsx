@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useToast } from '../components/Toast';
+import { useToast } from '../../components/Toast';
 
 interface ProviderInfo {
   name: string;
