@@ -20,10 +20,11 @@ class LLMRuntimeAdapter:
 
     def _ensure_registry(self):
         if self._registry is None:
-            from src.llm_providers import get_provider_registry, get_role_model
+            from src.llm_providers import get_provider_registry
+            from src.llm_providers.registry import get_role_model_from_config
 
             self._registry = get_provider_registry()
-            self._get_role_model = get_role_model
+            self._get_role_model = get_role_model_from_config
 
     async def execute(
         self,

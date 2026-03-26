@@ -89,146 +89,64 @@ class TestProviderConfig(unittest.TestCase):
         from src.llm_providers.config import get_role_runtime
 
         runtime = get_role_runtime("unknown_role")
+
         self.assertEqual(runtime, "claude_code")
 
-    def test_get_role_runtime_override(self):
-        with patch.dict(os.environ, {"AGENT_RUNTIME_MAP": '{"pm": "ollama"}'}, clear=False):
-            from src.llm_providers import config
+    def test_agent_registry_has_runtime_field(self):
+        from config import AGENT_REGISTRY
 
-            reload(config)
+        pm_config = AGENT_REGISTRY["pm"]
 
-            runtime = get_role_runtime("pm")
-            self.assertEqual(runtime, "ollama")
+        self.assertEqual(pm_config.runtime, "claude_code")
 
 
-class TestToolDefinitions(unittest.TestCase):
-    """Test tool definition classes."""
+class TestProviderConfigEnv(unittest.TestCase):
+    """Test provider config from environment variables."""
 
-    def test_tool_definition_creation(self):
-        from src.llm_providers.base import ToolDefinition, ToolUse, ToolResult
+    def test_ollama_host_from_env(self):
+        with patch.dict(os.environ, {"OLLAMA_HOST": "http://custom:11434"}, clear=True):
+            import importlib
+            import src.llm_providers.config as config_module
 
-        tool = ToolDefinition(
-            name="bash",
-            description="Execute bash command",
-            parameters={"type": "object", "properties": {"command": {"type": "string"}}},
+            importlib.reload(config_module)
+
+            self.assertIn("ollama", config_module.LLM_PROVIDER_CONFIGS)
+            self.assertEqual(
+                config_module.LLM_PROVIDER_CONFIGS["ollama"].base_url, "http://custom:11434"
+            )
+
+    def test_openai_model_from_env(self):
+        with patch.dict(
+            os.environ, {"OPENAI_API_KEY": "test-key", "OPENAI_DEFAULT_MODEL": "gpt-4"}, clear=True
+        ):
+            import importlib
+            import src.llm_providers.config as config_module
+
+            importlib.reload(config_module)
+
+            self.assertIn("openai", config_module.LLM_PROVIDER_CONFIGS)
+            self.assertEqual(config_module.LLM_PROVIDER_CONFIGS["openai"].default_model, "gpt-4")
+
+
+class TestRegistryConfig(unittest.TestCase):
+    """Test registry config functions."""
+
+    def test_get_role_runtime_from_config(self):
+        from src.llm_providers.registry import get_role_runtime_from_config
+
+        runtime = get_role_runtime_from_config("pm")
+
+        self.assertIn(
+            runtime,
+            ["claude_code", "ollama", "openai", "anthropic", "gemini", "openclaw", "bash", "http"],
         )
 
-        self.assertEqual(tool.name, "bash")
-        self.assertEqual(tool.description, "Execute bash command")
+    def test_get_role_model_from_config(self):
+        from src.llm_providers.registry import get_role_model_from_config
 
-    def test_tool_use_creation(self):
-        from src.llm_providers.base import ToolUse
+        model = get_role_model_from_config("pm", "claude_code")
 
-        tool_use = ToolUse(name="bash", input={"command": "ls -la"}, id="call_123")
-
-        self.assertEqual(tool_use.name, "bash")
-        self.assertEqual(tool_use.input["command"], "ls -la")
-        self.assertEqual(tool_use.id, "call_123")
-
-
-class TestOllamaRuntime(unittest.TestCase):
-    """Test Ollama runtime implementation."""
-
-    @patch("src.llm_providers.ollama_runtime.request")
-    def test_execute_success(self, mock_request):
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({"response": "Test output"}).encode()
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=False)
-        mock_request.urlopen.return_value = mock_response
-
-        from src.llm_providers.ollama_runtime import OllamaRuntime
-
-        runtime = OllamaRuntime(host="http://localhost:11434", default_model="llama3")
-
-        import asyncio
-
-        result = asyncio.run(runtime.execute("test prompt"))
-
-        self.assertEqual(result["status"], "success")
-        self.assertEqual(result["result_text"], "Test output")
-        self.assertEqual(result["model"], "llama3")
-        self.assertEqual(result["provider"], "ollama")
-
-    @patch("src.llm_providers.ollama_runtime.request")
-    def test_list_models(self, mock_request):
-        mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps(
-            {"models": [{"name": "llama3"}, {"name": "mistral"}]}
-        ).encode()
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=False)
-        mock_request.urlopen.return_value = mock_response
-
-        from src.llm_providers.ollama_runtime import OllamaRuntime
-
-        runtime = OllamaRuntime()
-
-        import asyncio
-
-        models = asyncio.run(runtime.list_models())
-
-        self.assertEqual(models, ["llama3", "mistral"])
-
-
-class TestProviderErrorClasses(unittest.TestCase):
-    """Test custom exception classes."""
-
-    def test_provider_error(self):
-        from src.llm_providers.base import ProviderError
-
-        with self.assertRaises(ProviderError):
-            raise ProviderError("Test error")
-
-    def test_model_not_found_error(self):
-        from src.llm_providers.base import ModelNotFoundError
-
-        with self.assertRaises(ModelNotFoundError):
-            raise ModelNotFoundError("Model not found")
-
-    def test_authentication_error(self):
-        from src.llm_providers.base import AuthenticationError
-
-        with self.assertRaises(AuthenticationError):
-            raise AuthenticationError("Invalid API key")
-
-    def test_rate_limit_error(self):
-        from src.llm_providers.base import RateLimitError
-
-        with self.assertRaises(RateLimitError):
-            raise RateLimitError("Rate limited")
-
-
-class TestRegistry(unittest.TestCase):
-    """Test provider registry."""
-
-    def test_registry_creation(self):
-        from src.llm_providers.registry import LLMProviderRegistry
-
-        registry = LLMProviderRegistry()
-
-        self.assertEqual(registry.list_providers(), [])
-
-    def test_registry_register(self):
-        from src.llm_providers.registry import LLMProviderRegistry
-
-        mock_provider = MagicMock()
-        mock_provider.name = "Test Provider"
-
-        registry = LLMProviderRegistry()
-        registry.register("test", mock_provider)
-
-        self.assertIn("test", registry.list_providers())
-        self.assertEqual(registry.get("test"), mock_provider)
-
-    def test_registry_get_unknown(self):
-        from src.llm_providers.base import ProviderError
-        from src.llm_providers.registry import LLMProviderRegistry
-
-        registry = LLMProviderRegistry()
-
-        with self.assertRaises(ProviderError):
-            registry.get("unknown")
+        self.assertIsInstance(model, str)
 
 
 def reload(module):

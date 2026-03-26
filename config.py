@@ -17,7 +17,7 @@ import logging
 import os
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, TypeVar, Optional
 
 from dotenv import load_dotenv
 
@@ -126,6 +126,9 @@ class AgentConfig:
     # Frontend styling
     tw_color: str = "blue"  # Tailwind color name for border/bg/text classes
     accent: str = "#638cff"  # Hex accent color for UI highlights/glow
+    # LLM Provider configuration
+    runtime: str = "claude_code"  # Runtime: claude_code, ollama, openai, anthropic, gemini
+    model: str = ""  # Model name (provider-specific), empty = use provider default
 
 
 AGENT_REGISTRY: dict[str, AgentConfig] = {

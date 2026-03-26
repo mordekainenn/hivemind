@@ -9,6 +9,32 @@ from .config import LLM_PROVIDER_CONFIGS, get_role_model, get_role_runtime
 logger = logging.getLogger(__name__)
 
 
+def get_role_runtime_from_config(role: str) -> str:
+    """Get runtime for a role from config.py AGENT_REGISTRY."""
+    try:
+        from config import AGENT_REGISTRY
+
+        if role in AGENT_REGISTRY:
+            return AGENT_REGISTRY[role].runtime
+    except ImportError:
+        pass
+    return get_role_runtime(role)
+
+
+def get_role_model_from_config(role: str, runtime: str) -> str:
+    """Get model for a role from config.py AGENT_REGISTRY."""
+    try:
+        from config import AGENT_REGISTRY
+
+        if role in AGENT_REGISTRY:
+            model = AGENT_REGISTRY[role].model
+            if model:
+                return model
+    except ImportError:
+        pass
+    return get_role_model(role, runtime)
+
+
 class LLMProviderRegistry:
     def __init__(self):
         self._providers: dict[str, LLMProvider] = {}
