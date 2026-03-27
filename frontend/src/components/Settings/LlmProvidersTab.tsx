@@ -134,6 +134,7 @@ export default function LlmProvidersTab() {
   }
 
   const cost = (data as any)?.llm_providers?._cost || { session_total: 0, provider_breakdown: {} };
+  const providers = (data as any)?.llm_providers || {};
   const brainRuntime = layerConfig.brain_layer_runtime;
   const brainModel = layerConfig.brain_layer_model;
   const execRuntime = layerConfig.execution_layer_runtime;
@@ -374,6 +375,58 @@ export default function LlmProvidersTab() {
                   {PROVIDER_ICONS[provider] || '❓'} {provider}: ${(amount || 0).toFixed(4)}
                 </span>
               ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Provider Status */}
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-dim)' }}
+      >
+        <div className="px-5 py-3.5 flex items-center gap-2.5" style={{ borderBottom: '1px solid var(--border-dim)' }}>
+          <span className="text-base">🔌</span>
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Configured Providers
+          </h2>
+        </div>
+        <div className="divide-y" style={{ borderColor: 'var(--border-dim)' }}>
+          {Object.entries(providers).filter(([k]) => !k.startsWith('_')).map(([key, provider]) => {
+            const p = provider as ProviderInfo;
+            return (
+            <div key={key} className="px-5 py-3 flex items-center gap-3">
+              <span className="text-lg">{PROVIDER_ICONS[key] || '❓'}</span>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {p.name}
+                  </span>
+                {p.has_api_key ? (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
+                      Configured
+                    </span>
+                  ) : p.name === 'Ollama' ? (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
+                      Local
+                    </span>
+                  ) : (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
+                      No API Key
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {p.base_url}
+                </div>
+              </div>
+            </div>
+          )})}
+          {Object.keys(providers).length === 0 && (
+            <div className="px-5 py-6 text-center">
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                No LLM providers configured. Add API keys in your .env file.
+              </p>
             </div>
           )}
         </div>
