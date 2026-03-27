@@ -69,6 +69,15 @@ export default function LlmProvidersTab() {
 
   const availableRuntimes = ['claude_code', 'ollama', 'openai', 'anthropic', 'gemini', 'minimax'];
 
+  const getModelsForRuntime = (runtime: string) => {
+    return availableModels[runtime] || [];
+  };
+
+  const loadModelsForLayer = (runtime: string) => {
+    if (runtime === 'claude_code') return;
+    loadModels(runtime);
+  };
+
   const loadData = () => {
     setLoading(true);
     fetch('/api/settings')
@@ -81,6 +90,13 @@ export default function LlmProvidersTab() {
           execution_layer_runtime: d.execution_layer_runtime || 'claude_code',
           execution_layer_model: d.execution_layer_model || '',
         });
+        // Pre-load models for configured runtimes
+        if (d.brain_layer_runtime && d.brain_layer_runtime !== 'claude_code') {
+          loadModels(d.brain_layer_runtime);
+        }
+        if (d.execution_layer_runtime && d.execution_layer_runtime !== 'claude_code') {
+          loadModels(d.execution_layer_runtime);
+        }
       })
       .catch(() => setError('Failed to load provider data'))
       .finally(() => setLoading(false));
@@ -196,20 +212,43 @@ export default function LlmProvidersTab() {
                   className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
                   style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
                   value={layerConfig.brain_layer_runtime}
-                  onChange={(e) => setLayerConfig({ ...layerConfig, brain_layer_runtime: e.target.value })}
+                  onChange={(e) => {
+                    setLayerConfig({ ...layerConfig, brain_layer_runtime: e.target.value, brain_layer_model: '' });
+                    loadModelsForLayer(e.target.value);
+                  }}
                 >
                   {availableRuntimes.map(r => (
                     <option key={r} value={r}>{PROVIDER_ICONS[r]} {r}</option>
                   ))}
                 </select>
-                <input
-                  type="text"
-                  placeholder="Model (optional)"
-                  className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
-                  style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
-                  value={layerConfig.brain_layer_model}
-                  onChange={(e) => setLayerConfig({ ...layerConfig, brain_layer_model: e.target.value })}
-                />
+                {layerConfig.brain_layer_runtime !== 'claude_code' && (
+                  <>
+                    <select
+                      className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
+                      style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                      value={layerConfig.brain_layer_model}
+                      onChange={(e) => setLayerConfig({ ...layerConfig, brain_layer_model: e.target.value })}
+                    >
+                      <option value="">Default model</option>
+                      {getModelsForRuntime(layerConfig.brain_layer_runtime).map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                      {layerConfig.brain_layer_runtime !== 'claude_code' && !loadingModels[layerConfig.brain_layer_runtime] && !availableModels[layerConfig.brain_layer_runtime] && (
+                        <option value="">Enter model name</option>
+                      )}
+                    </select>
+                    {(!availableModels[layerConfig.brain_layer_runtime] || availableModels[layerConfig.brain_layer_runtime].length === 0) && layerConfig.brain_layer_runtime !== 'claude_code' && (
+                      <input
+                        type="text"
+                        placeholder="Or type model..."
+                        className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
+                        style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                        value={layerConfig.brain_layer_model}
+                        onChange={(e) => setLayerConfig({ ...layerConfig, brain_layer_model: e.target.value })}
+                      />
+                    )}
+                  </>
+                )}
                 <button
                   onClick={saveLayerConfig}
                   disabled={saving}
@@ -259,20 +298,43 @@ export default function LlmProvidersTab() {
                   className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
                   style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
                   value={layerConfig.execution_layer_runtime}
-                  onChange={(e) => setLayerConfig({ ...layerConfig, execution_layer_runtime: e.target.value })}
+                  onChange={(e) => {
+                    setLayerConfig({ ...layerConfig, execution_layer_runtime: e.target.value, execution_layer_model: '' });
+                    loadModelsForLayer(e.target.value);
+                  }}
                 >
                   {availableRuntimes.map(r => (
                     <option key={r} value={r}>{PROVIDER_ICONS[r]} {r}</option>
                   ))}
                 </select>
-                <input
-                  type="text"
-                  placeholder="Model (optional)"
-                  className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
-                  style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
-                  value={layerConfig.execution_layer_model}
-                  onChange={(e) => setLayerConfig({ ...layerConfig, execution_layer_model: e.target.value })}
-                />
+                {layerConfig.execution_layer_runtime !== 'claude_code' && (
+                  <>
+                    <select
+                      className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
+                      style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                      value={layerConfig.execution_layer_model}
+                      onChange={(e) => setLayerConfig({ ...layerConfig, execution_layer_model: e.target.value })}
+                    >
+                      <option value="">Default model</option>
+                      {getModelsForRuntime(layerConfig.execution_layer_runtime).map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                      {layerConfig.execution_layer_runtime !== 'claude_code' && !loadingModels[layerConfig.execution_layer_runtime] && !availableModels[layerConfig.execution_layer_runtime] && (
+                        <option value="">Enter model name</option>
+                      )}
+                    </select>
+                    {(!availableModels[layerConfig.execution_layer_runtime] || availableModels[layerConfig.execution_layer_runtime].length === 0) && layerConfig.execution_layer_runtime !== 'claude_code' && (
+                      <input
+                        type="text"
+                        placeholder="Or type model..."
+                        className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
+                        style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                        value={layerConfig.execution_layer_model}
+                        onChange={(e) => setLayerConfig({ ...layerConfig, execution_layer_model: e.target.value })}
+                      />
+                    )}
+                  </>
+                )}
                 <button
                   onClick={saveLayerConfig}
                   disabled={saving}
@@ -351,7 +413,7 @@ export default function LlmProvidersTab() {
             const p = provider as ProviderInfo;
             return (
             <div key={key} className="px-5 py-4">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
@@ -386,41 +448,6 @@ export default function LlmProvidersTab() {
                     </div>
                   </div>
                 </div>
-              </div>
-              
-              {/* Model selector */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Model:</span>
-                <button
-                  onClick={() => loadModels(key)}
-                  className="flex-1 text-left px-3 py-1.5 text-sm rounded-lg border"
-                  style={{ 
-                    background: 'var(--bg-elevated)', 
-                    borderColor: 'var(--border-subtle)',
-                    color: 'var(--text-primary)'
-                  }}
-                >
-                  {p.default_model || 'Select model...'}
-                  {loadingModels[key] && <span className="ml-2 text-xs text-gray-400">(loading...)</span>}
-                </button>
-                {availableModels[key] && availableModels[key].length > 0 && (
-                  <select
-                    className="px-2 py-1.5 text-xs rounded-lg border"
-                    style={{ 
-                      background: 'var(--bg-elevated)', 
-                      borderColor: 'var(--border-subtle)',
-                      color: 'var(--text-primary)'
-                    }}
-                    value={p.default_model}
-                    onChange={(e) => {
-                      console.log(`Selected ${key} model: ${e.target.value}`);
-                    }}
-                  >
-                    {availableModels[key].map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                )}
               </div>
             </div>
           )})}
