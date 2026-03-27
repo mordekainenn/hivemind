@@ -223,24 +223,22 @@ export default function LlmProvidersTab() {
                 </select>
                 {layerConfig.brain_layer_runtime !== 'claude_code' && (
                   <>
-                    <select
-                      className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
-                      style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
-                      value={layerConfig.brain_layer_model}
-                      onChange={(e) => setLayerConfig({ ...layerConfig, brain_layer_model: e.target.value })}
-                    >
-                      <option value="">Default model</option>
-                      {getModelsForRuntime(layerConfig.brain_layer_runtime).map(m => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                      {layerConfig.brain_layer_runtime !== 'claude_code' && !loadingModels[layerConfig.brain_layer_runtime] && !availableModels[layerConfig.brain_layer_runtime] && (
-                        <option value="">Enter model name</option>
-                      )}
-                    </select>
-                    {(!availableModels[layerConfig.brain_layer_runtime] || availableModels[layerConfig.brain_layer_runtime].length === 0) && layerConfig.brain_layer_runtime !== 'claude_code' && (
+                    {getModelsForRuntime(layerConfig.brain_layer_runtime).length > 0 ? (
+                      <select
+                        className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
+                        style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                        value={layerConfig.brain_layer_model}
+                        onChange={(e) => setLayerConfig({ ...layerConfig, brain_layer_model: e.target.value })}
+                      >
+                        <option value="">Default model</option>
+                        {getModelsForRuntime(layerConfig.brain_layer_runtime).map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    ) : (
                       <input
                         type="text"
-                        placeholder="Or type model..."
+                        placeholder="Model name..."
                         className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
                         style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
                         value={layerConfig.brain_layer_model}
@@ -309,24 +307,22 @@ export default function LlmProvidersTab() {
                 </select>
                 {layerConfig.execution_layer_runtime !== 'claude_code' && (
                   <>
-                    <select
-                      className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
-                      style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
-                      value={layerConfig.execution_layer_model}
-                      onChange={(e) => setLayerConfig({ ...layerConfig, execution_layer_model: e.target.value })}
-                    >
-                      <option value="">Default model</option>
-                      {getModelsForRuntime(layerConfig.execution_layer_runtime).map(m => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                      {layerConfig.execution_layer_runtime !== 'claude_code' && !loadingModels[layerConfig.execution_layer_runtime] && !availableModels[layerConfig.execution_layer_runtime] && (
-                        <option value="">Enter model name</option>
-                      )}
-                    </select>
-                    {(!availableModels[layerConfig.execution_layer_runtime] || availableModels[layerConfig.execution_layer_runtime].length === 0) && layerConfig.execution_layer_runtime !== 'claude_code' && (
+                    {getModelsForRuntime(layerConfig.execution_layer_runtime).length > 0 ? (
+                      <select
+                        className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
+                        style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                        value={layerConfig.execution_layer_model}
+                        onChange={(e) => setLayerConfig({ ...layerConfig, execution_layer_model: e.target.value })}
+                      >
+                        <option value="">Default model</option>
+                        {getModelsForRuntime(layerConfig.execution_layer_runtime).map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    ) : (
                       <input
                         type="text"
-                        placeholder="Or type model..."
+                        placeholder="Model name..."
                         className="flex-1 px-2 py-1.5 text-sm rounded-lg border"
                         style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
                         value={layerConfig.execution_layer_model}

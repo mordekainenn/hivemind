@@ -187,7 +187,6 @@ def _get_llm_provider_info():
                 "name": config.name,
                 "enabled": config.enabled,
                 "has_api_key": bool(config.api_key),
-                "default_model": config.default_model,
                 "base_url": config.base_url,
             }
 
