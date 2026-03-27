@@ -41,16 +41,6 @@ const PROVIDER_ICONS: Record<string, string> = {
   http: '🌐',
 };
 
-const PROVIDER_COLORS: Record<string, string> = {
-  claude_code: '#d97706',
-  openclaw: '#6366f1',
-  ollama: '#10b981',
-  openai: '#10b981',
-  anthropic: '#d97706',
-  gemini: '#4285f4',
-  minimax: '#ec4899',
-};
-
 export default function LlmProvidersTab() {
   const [data, setData] = useState<LlmProvidersData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,15 +133,11 @@ export default function LlmProvidersTab() {
     );
   }
 
-  const providers = (data as any)?.llm_providers || {};
   const cost = (data as any)?.llm_providers?._cost || { session_total: 0, provider_breakdown: {} };
   const brainRuntime = layerConfig.brain_layer_runtime;
   const brainModel = layerConfig.brain_layer_model;
   const execRuntime = layerConfig.execution_layer_runtime;
   const execModel = layerConfig.execution_layer_model;
-  
-  // Filter out the _cost key from providers display
-  const providerList = Object.entries(providers).filter(([k]) => !k.startsWith('_'));
 
   const saveLayerConfig = async () => {
     setSaving(true);
@@ -388,70 +374,6 @@ export default function LlmProvidersTab() {
                   {PROVIDER_ICONS[provider] || '❓'} {provider}: ${(amount || 0).toFixed(4)}
                 </span>
               ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Provider List */}
-      <div
-        className="rounded-2xl overflow-hidden"
-        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-dim)' }}
-      >
-        <div className="px-5 py-3.5 flex items-center gap-2.5" style={{ borderBottom: '1px solid var(--border-dim)' }}>
-          <span className="text-base">🔌</span>
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            LLM Providers
-          </h2>
-        </div>
-        <div className="divide-y" style={{ borderColor: 'var(--border-dim)' }}>
-          {providerList.map(([key, provider]) => {
-            const p = provider as ProviderInfo;
-            return (
-            <div key={key} className="px-5 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
-                    style={{ 
-                      background: `${PROVIDER_COLORS[key] || '#6366f1'}20`,
-                      boxShadow: `0 0 12px ${PROVIDER_COLORS[key] || '#6366f1'}30`
-                    }}
-                  >
-                    {PROVIDER_ICONS[key] || '❓'}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                        {p.name}
-                      </span>
-                    {p.has_api_key ? (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
-                          Configured
-                        </span>
-                      ) : p.name === 'Ollama' ? (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
-                          Local
-                        </span>
-                      ) : (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
-                          No API Key
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {p.base_url}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )})}
-          {Object.keys(providers).length === 0 && (
-            <div className="px-5 py-8 text-center">
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                No LLM providers configured. Add API keys in your .env file.
-              </p>
             </div>
           )}
         </div>
