@@ -81,7 +81,10 @@ HIVEMIND_TOOLS = {
 
 
 class OllamaClientError(ProviderError):
-    pass
+    def __init__(self, message: str, is_rate_limit: bool = False, retry_after: int = 60):
+        super().__init__(message)
+        self.is_rate_limit = is_rate_limit
+        self.retry_after = retry_after
 
 
 class OllamaRuntime:
@@ -117,7 +120,20 @@ class OllamaRuntime:
                 return json.loads(body) if body else {}
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise OllamaClientError(f"Ollama HTTP {exc.code}: {detail}") from exc
+            error_str = str(exc.code) + " " + detail
+            is_rate_limit = exc.code == 429
+            retry_after = 60
+            if is_rate_limit:
+                import re
+
+                match = re.search(r"retry.?after.*?(\d+)", detail.lower())
+                if match:
+                    retry_after = int(match.group(1))
+            raise OllamaClientError(
+                f"Ollama HTTP {exc.code}: {detail}",
+                is_rate_limit=is_rate_limit,
+                retry_after=retry_after,
+            ) from exc
         except error.URLError as exc:
             raise OllamaClientError(f"Failed to reach Ollama at {self.host}: {exc.reason}") from exc
         except TimeoutError as exc:
@@ -177,11 +193,12 @@ class OllamaRuntime:
         except OllamaClientError as e:
             elapsed = time.monotonic() - start_time
             return {
-                "status": "error",
+                "status": "rate_limited" if e.is_rate_limit else "error",
                 "error_message": str(e),
                 "duration_seconds": elapsed,
                 "model": model,
                 "provider": "ollama",
+                "retry_after": e.retry_after if e.is_rate_limit else None,
             }
         except Exception as e:
             elapsed = time.monotonic() - start_time

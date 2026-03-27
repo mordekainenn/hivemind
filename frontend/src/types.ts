@@ -249,6 +249,11 @@ export interface Settings {
   max_user_message_length: number;
   session_expiry_hours: number;
   max_orchestrator_loops: number;
+  llm_providers?: Record<string, any>;
+  brain_layer_runtime?: string;
+  brain_layer_model?: string;
+  execution_layer_runtime?: string;
+  execution_layer_model?: string;
 }
 
 export interface DirEntry {

@@ -157,7 +157,15 @@ async def run_architect_review(
     Returns:
         ArchitectureBrief with analysis results
     """
+    from src.llm_providers.registry import get_role_runtime_from_config, get_role_model_from_config
+    from src.llm_providers import initialize_providers
     import state
+
+    initialize_providers()
+    runtime_name = get_role_runtime_from_config("architect")
+    model_name = get_role_model_from_config("architect", runtime_name)
+
+    logger.info(f"[Architect] Runtime: runtime={runtime_name}, model={model_name or 'default'}")
 
     sdk = state.sdk_client
     if sdk is None:
@@ -165,6 +173,45 @@ async def run_architect_review(
         return ArchitectureBrief(project_id=project_id)
 
     prompt = _build_architect_prompt(project_id, project_dir, user_task, memory_snapshot)
+
+    # Use LLM provider if not claude_code
+    if runtime_name != "claude_code":
+        from src.llm_providers.adapter import LLMRuntimeAdapter
+
+        adapter = LLMRuntimeAdapter(runtime_name)
+        try:
+            result = await adapter.execute(
+                prompt=prompt,
+                system_prompt=ARCHITECT_SYSTEM_PROMPT,
+                working_dir=project_dir,
+                role="architect",
+                max_turns=8,
+                timeout=120,
+                budget_usd=5.0,
+            )
+
+            if on_stream:
+                await on_stream(result.result_text)
+
+            if result.error_message:
+                logger.warning(
+                    f"[Architect] LLM error: {result.error_message}. Returning empty brief."
+                )
+                return ArchitectureBrief(project_id=project_id)
+
+            brief = _parse_architect_response(result.result_text, project_id)
+            logger.info(
+                f"[Architect] Brief produced: {len(brief.key_files)} key files, "
+                f"{len(brief.risks)} risks, {len(brief.constraints)} constraints"
+            )
+            return brief
+
+        except Exception as exc:
+            logger.warning(
+                f"[Architect] Review failed: {type(exc).__name__}: {exc}. Returning empty brief.",
+                exc_info=True,
+            )
+            return ArchitectureBrief(project_id=project_id)
 
     try:
         response = await sdk.query_with_retry(

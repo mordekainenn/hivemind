@@ -58,7 +58,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'providers'>('general');
+  const [activeTab, setActiveTab] = useState<string>('general');
   const toast = useToast();
 
   const loadSettings = () => {
@@ -70,8 +70,10 @@ export default function SettingsPage() {
         const d: Record<string, number> = {};
         for (const section of EDITABLE_FIELDS) {
           for (const field of section.fields) {
-            const val = s[field.key];
-            d[field.key] = typeof val === 'number' ? val : 0;
+            const key = field.key;
+            if (!key) continue;
+            const val = (s as any)[key];
+            d[key] = typeof val === 'number' ? val : 0;
           }
         }
         setDraft(d);
@@ -108,7 +110,11 @@ export default function SettingsPage() {
   };
 
   const hasChanges = settings ? EDITABLE_FIELDS.some(s => {
-    return s.fields.some(f => draft[f.key] !== settings[f.key]);
+    return s.fields.some(f => {
+      const key = f.key;
+      if (!key) return false;
+      return draft[key] !== (settings as any)[key];
+    });
   }) : false;
 
   if (loading) {
@@ -199,20 +205,22 @@ export default function SettingsPage() {
                       style={{ borderBottom: i < section.fields.length - 1 ? '1px solid var(--border-dim)' : 'none' }}
                     >
                       <div className="min-w-0">
-                        <label htmlFor={`field-${field.key}`} className="text-sm" style={{ color: 'var(--text-primary)' }}>{field.label}</label>
-                        <div id={`desc-${field.key}`} className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{field.desc}</div>
+                        <label htmlFor={`field-${field.key || ''}`} className="text-sm" style={{ color: 'var(--text-primary)' }}>{field.label}</label>
+                        <div id={`desc-${field.key || ''}`} className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{field.desc}</div>
                       </div>
                       <input
-                        id={`field-${field.key}`}
+                        id={`field-${field.key || ''}`}
                         type="number"
-                        value={draft[field.key] ?? 0}
+                        value={(field.key && draft[field.key]) ?? 0}
                         aria-label={field.label}
-                        aria-describedby={`desc-${field.key}`}
+                        aria-describedby={`desc-${field.key || ''}`}
                         onChange={(e) => {
+                          if (!field.key) return;
                           const val = field.type === 'float'
                             ? parseFloat(e.target.value) || 0
                             : parseInt(e.target.value) || 0;
-                          setDraft(prev => ({ ...prev, [field.key]: val }));
+                          const k = field.key as string;
+                          setDraft(prev => ({ ...prev, [k]: val }));
                         }}
                         min={field.min}
                         max={field.max}

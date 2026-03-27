@@ -3,11 +3,22 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Load overrides from settings file
+_OVERRIDES_PATH = Path("data/settings_overrides.json")
+if _OVERRIDES_PATH.exists():
+    try:
+        _OVERRIDES = json.loads(_OVERRIDES_PATH.read_text())
+    except Exception:
+        _OVERRIDES = {}
+else:
+    _OVERRIDES = {}
 
 
 @dataclass
@@ -136,10 +147,16 @@ try:
 except (json.JSONDecodeError, TypeError):
     pass
 
-BRAIN_LAYER_RUNTIME = os.getenv("BRAIN_LAYER_RUNTIME", "claude_code")
-BRAIN_LAYER_MODEL = os.getenv("BRAIN_LAYER_MODEL", "")
-EXECUTION_LAYER_RUNTIME = os.getenv("EXECUTION_LAYER_RUNTIME", "claude_code")
-EXECUTION_LAYER_MODEL = os.getenv("EXECUTION_LAYER_MODEL", "")
+BRAIN_LAYER_RUNTIME = _OVERRIDES.get("brain_layer_runtime") or os.getenv(
+    "BRAIN_LAYER_RUNTIME", "claude_code"
+)
+BRAIN_LAYER_MODEL = _OVERRIDES.get("brain_layer_model") or os.getenv("BRAIN_LAYER_MODEL", "")
+EXECUTION_LAYER_RUNTIME = _OVERRIDES.get("execution_layer_runtime") or os.getenv(
+    "EXECUTION_LAYER_RUNTIME", "claude_code"
+)
+EXECUTION_LAYER_MODEL = _OVERRIDES.get("execution_layer_model") or os.getenv(
+    "EXECUTION_LAYER_MODEL", ""
+)
 
 
 def get_role_runtime(role: str) -> str:

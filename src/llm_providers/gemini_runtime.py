@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 import time
 from typing import Any, AsyncIterator
 
@@ -93,13 +95,33 @@ class GeminiRuntime:
 
         except Exception as e:
             elapsed = time.monotonic() - start_time
+            error_str = str(e).lower()
+
+            is_rate_limit = any(
+                kw in error_str
+                for kw in [
+                    "rate limit",
+                    "429",
+                    "too many requests",
+                    "throttl",
+                    "rate_limit",
+                    "quota",
+                ]
+            )
+            retry_after = 60
+            if "retry_after" in error_str or "retry" in error_str:
+                match = re.search(r"retry.?after.*?(\d+)", error_str)
+                if match:
+                    retry_after = int(match.group(1))
+
             logger.error(f"Gemini error: {e}")
             return {
-                "status": "error",
+                "status": "rate_limited" if is_rate_limit else "error",
                 "error_message": str(e),
                 "duration_seconds": elapsed,
                 "model": model_name,
                 "provider": "gemini",
+                "retry_after": retry_after if is_rate_limit else None,
             }
 
     async def execute_streaming(

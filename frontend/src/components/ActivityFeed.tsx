@@ -234,7 +234,11 @@ function translateError(raw: string): { title: string; detail: string; actions: 
     return { title: 'Agent Timed Out', detail: 'The agent took too long to respond. This often happens with complex tasks.', actions: ['retry', 'dismiss'] };
   }
   if (lower.includes('rate limit') || lower.includes('429') || lower.includes('too many')) {
-    return { title: 'Rate Limited', detail: 'Too many requests. The system will automatically retry shortly.', actions: ['dismiss'] };
+    const providerMatch = raw.match(/(openai|anthropic|ollama|gemini|minimax)/i);
+    const provider = providerMatch ? providerMatch[1].charAt(0).toUpperCase() + providerMatch[1].slice(1).toLowerCase() : 'the provider';
+    const retryMatch = raw.match(/retry[_-]?after["\s:]+(\d+)/i);
+    const retrySeconds = retryMatch ? retryMatch[1] : '60';
+    return { title: 'Rate Limited', detail: `${provider} rate limit exceeded. Retry in ~${retrySeconds} seconds.`, actions: ['dismiss'] };
   }
   if (lower.includes('connection') || lower.includes('network') || lower.includes('fetch')) {
     return { title: 'Connection Lost', detail: 'Could not reach the server. Check your network connection.', actions: ['retry', 'dismiss'] };

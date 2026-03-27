@@ -36,13 +36,78 @@ from config import (
     SDK_MAX_TURNS_PER_QUERY,
     SOLO_AGENT_PROMPT,
     get_agent_timeout,
+    get_agent_config,
 )
 from isolated_query import isolated_query
 from project_context import build_project_header
 from prompts import get_specialist_prompt
 from sdk_client import SDKResponse
+from src.llm_providers.registry import get_role_runtime_from_config, get_role_model_from_config
+from src.llm_providers import initialize_providers
 
 logger = logging.getLogger(__name__)
+
+
+async def _query_with_llm_provider(
+    adapter,
+    *,
+    prompt: str,
+    system_prompt: str,
+    cwd: str,
+    role: str,
+    max_turns: int,
+    max_budget_usd: float,
+    on_stream: callable | None,
+    on_tool_use: callable | None,
+    model: str,
+) -> SDKResponse:
+    """Execute a query using an LLM provider adapter."""
+    from sdk_client import SDKResponse
+
+    try:
+        result = await adapter.execute(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            working_dir=cwd,
+            role=role,
+            max_turns=max_turns,
+            timeout=900,
+            budget_usd=max_budget_usd,
+        )
+
+        # Map LLM provider result to SDKResponse
+        is_error = (
+            result.status.value != "success"
+            if hasattr(result.status, "value")
+            else result.status != "success"
+        )
+
+        return SDKResponse(
+            text=result.result_text,
+            is_error=is_error,
+            error_message=result.error_message if is_error else "",
+            cost_usd=result.cost_usd,
+            input_tokens=result.tokens_in,
+            output_tokens=result.tokens_out,
+            total_tokens=result.tokens_in + result.tokens_out,
+            duration_ms=int(result.duration_seconds * 1000),
+            num_turns=1,
+            session_id=None,
+        )
+    except Exception as e:
+        logger.error(f"LLM provider error: {e}")
+        return SDKResponse(
+            text="",
+            is_error=True,
+            error_message=str(e),
+            cost_usd=0.0,
+            input_tokens=0,
+            output_tokens=0,
+            total_tokens=0,
+            duration_ms=0,
+            num_turns=0,
+            session_id=None,
+        )
 
 
 # ── _query_agent ─────────────────────────────────────────────────────────
@@ -188,10 +253,36 @@ async def query_agent(
             timestamp=time.time(),
         )
 
+    # Determine which runtime to use based on agent config
+    initialize_providers()
+    runtime_name = get_role_runtime_from_config(agent_role)
+    model_name = get_role_model_from_config(agent_role, runtime_name)
+
+    logger.info(
+        f"[{mgr.project_id}] Runtime for '{agent_role}': runtime={runtime_name}, model={model_name or 'default'}"
+    )
+
     # Event-loop isolation decision
     use_isolation = agent_role != "orchestrator"
 
-    if use_isolation:
+    if runtime_name != "claude_code":
+        # Use LLM provider runtime
+        from src.llm_providers.adapter import LLMRuntimeAdapter
+
+        adapter = LLMRuntimeAdapter(runtime_name)
+        response = await _query_with_llm_provider(
+            adapter,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            cwd=mgr.project_dir,
+            role=agent_role,
+            max_turns=max_turns,
+            max_budget_usd=max_budget,
+            on_stream=on_stream,
+            on_tool_use=on_tool_use,
+            model=model_name,
+        )
+    elif use_isolation:
         role_timeout = get_agent_timeout(agent_role)
         response = await isolated_query(
             mgr.sdk,

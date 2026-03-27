@@ -100,4 +100,6 @@ class AuthenticationError(ProviderError):
 
 
 class RateLimitError(ProviderError):
-    pass
+    def __init__(self, message: str, retry_after: int = 60):
+        super().__init__(message)
+        self.retry_after = retry_after

@@ -154,6 +154,7 @@ async def get_stats():
 async def get_settings():
     """Get current config values."""
     import config as cfg
+    import src.llm_providers.config as llm_config
 
     return {
         "max_turns_per_cycle": cfg.MAX_TURNS_PER_CYCLE,
@@ -166,6 +167,11 @@ async def get_settings():
         "session_expiry_hours": cfg.SESSION_EXPIRY_HOURS,
         "max_orchestrator_loops": cfg.MAX_ORCHESTRATOR_LOOPS,
         "llm_providers": _get_llm_provider_info(),
+        # LLM Layer Configuration
+        "brain_layer_runtime": llm_config.BRAIN_LAYER_RUNTIME,
+        "brain_layer_model": llm_config.BRAIN_LAYER_MODEL,
+        "execution_layer_runtime": llm_config.EXECUTION_LAYER_RUNTIME,
+        "execution_layer_model": llm_config.EXECUTION_LAYER_MODEL,
     }
 
 
@@ -332,6 +338,11 @@ async def persist_settings(request: Request):
         "pipeline_max_steps",
         "scheduler_check_interval",
         "session_timeout_seconds",
+        # LLM Provider layer configuration
+        "brain_layer_runtime",
+        "brain_layer_model",
+        "execution_layer_runtime",
+        "execution_layer_model",
     }
 
     data = await request.json()
@@ -345,6 +356,32 @@ async def persist_settings(request: Request):
             f"Disallowed settings keys: {', '.join(sorted(rejected))}",
         )
 
+    # Handle LLM provider settings
+    llm_settings = {}
+    for key in [
+        "brain_layer_runtime",
+        "brain_layer_model",
+        "execution_layer_runtime",
+        "execution_layer_model",
+    ]:
+        if key in data and isinstance(data[key], str):
+            llm_settings[key] = data[key]
+
+    if llm_settings:
+        # Update config values directly
+        import src.llm_providers.config as llm_config
+
+        for key, value in llm_settings.items():
+            if key == "brain_layer_runtime":
+                llm_config.BRAIN_LAYER_RUNTIME = value
+            elif key == "brain_layer_model":
+                llm_config.BRAIN_LAYER_MODEL = value
+            elif key == "execution_layer_runtime":
+                llm_config.EXECUTION_LAYER_RUNTIME = value
+            elif key == "execution_layer_model":
+                llm_config.EXECUTION_LAYER_MODEL = value
+        logger.info(f"LLM provider settings updated: {llm_settings}")
+
     NUMERIC_BOUNDS = {
         "max_budget_usd": (0.1, 500.0),
         "max_turns_per_cycle": (1, 500),
@@ -353,6 +390,7 @@ async def persist_settings(request: Request):
         if key in data and isinstance(data[key], int | float):
             data[key] = max(lo, min(float(data[key]), hi))
 
+    # Write to overrides file
     overrides_path = Path("data/settings_overrides.json")
     overrides_path.parent.mkdir(parents=True, exist_ok=True)
     existing = {}
@@ -366,6 +404,7 @@ async def persist_settings(request: Request):
             )
     existing.update(data)
     overrides_path.write_text(json_mod.dumps(existing, indent=2))
+    logger.info(f"Settings persisted to {overrides_path}")
     return {"ok": True}
 
 

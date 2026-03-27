@@ -299,6 +299,15 @@ async def create_task_graph(
 
     Raises ValueError if the graph cannot be parsed after max_retries.
     """
+    from src.llm_providers.registry import get_role_runtime_from_config, get_role_model_from_config
+    from src.llm_providers import initialize_providers
+
+    initialize_providers()
+    runtime_name = get_role_runtime_from_config("pm")
+    model_name = get_role_model_from_config("pm", runtime_name)
+
+    logger.info(f"[PM] Runtime: runtime={runtime_name}, model={model_name or 'default'}")
+
     sdk = state.sdk_client
     if sdk is None:
         raise RuntimeError("SDK client not initialized. Call state.initialize() first.")
@@ -308,6 +317,23 @@ async def create_task_graph(
     from config import get_agent_config
 
     _pm_cfg = get_agent_config("pm")
+
+    # Use LLM provider if not claude_code
+    if runtime_name != "claude_code":
+        from src.llm_providers.adapter import LLMRuntimeAdapter
+
+        adapter = LLMRuntimeAdapter(runtime_name)
+        return await _create_task_graph_with_provider(
+            adapter,
+            user_message=user_message,
+            project_id=project_id,
+            manifest=manifest,
+            file_tree=file_tree,
+            memory_snapshot=memory_snapshot,
+            max_retries=max_retries,
+            on_stream=on_stream,
+            model=model_name,
+        )
 
     last_error: str = ""
     for attempt in range(max_retries + 1):
@@ -387,6 +413,71 @@ async def create_task_graph(
             return graph
 
         last_error = error
+
+    raise ValueError(
+        f"PM Agent failed to produce a valid TaskGraph after {max_retries + 1} attempts. "
+        f"Last error: {last_error}"
+    )
+
+
+async def _create_task_graph_with_provider(
+    adapter,
+    *,
+    user_message: str,
+    project_id: str,
+    manifest: str,
+    file_tree: str,
+    memory_snapshot: str,
+    max_retries: int,
+    on_stream: Callable[[str], Awaitable[None]] | None,
+    model: str,
+) -> TaskGraph:
+    """Create task graph using an LLM provider adapter."""
+    from config import get_agent_config
+
+    _pm_cfg = get_agent_config("pm")
+
+    prompt = _build_pm_prompt(user_message, project_id, manifest, file_tree, memory_snapshot)
+
+    last_error: str = ""
+    for attempt in range(max_retries + 1):
+        if attempt > 0:
+            logger.warning(f"[PM] Retry {attempt}/{max_retries} after parse error: {last_error}")
+            prompt = _build_retry_prompt(prompt, last_error)
+
+        logger.info(
+            f"[PM] Attempt {attempt + 1}/{max_retries + 1}: using LLM provider (max_turns={_pm_cfg.turns}, budget=${_pm_cfg.budget})"
+        )
+
+        try:
+            result = await adapter.execute(
+                prompt=prompt,
+                system_prompt=PM_SYSTEM_PROMPT,
+                working_dir=str(Path.cwd()),
+                role="pm",
+                max_turns=_pm_cfg.turns,
+                timeout=_pm_cfg.timeout,
+                budget_usd=_pm_cfg.budget,
+            )
+
+            if on_stream and result.result_text:
+                await on_stream(result.result_text)
+
+            graph, error = _parse_task_graph(result.result_text, project_id, user_message)
+            if graph is not None:
+                graph = _enforce_artifact_requirements(graph)
+                roles_used = list({t.role.value for t in graph.tasks})
+                logger.info(
+                    f"[PM] ✅ Task graph: {len(graph.tasks)} tasks × {len(roles_used)} roles "
+                    f"| vision='{graph.vision[:80]}'"
+                )
+                return graph
+
+            last_error = error
+
+        except Exception as e:
+            logger.error(f"[PM] LLM provider error: {e}")
+            last_error = str(e)
 
     raise ValueError(
         f"PM Agent failed to produce a valid TaskGraph after {max_retries + 1} attempts. "

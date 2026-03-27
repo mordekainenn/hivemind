@@ -92,6 +92,13 @@ class LLMRuntimeAdapter:
 
         status = RuntimeStatus.SUCCESS if result.get("status") == "success" else RuntimeStatus.ERROR
 
+        if result.get("status") == "rate_limited":
+            status = (
+                RuntimeStatus.RATE_LIMITED
+                if hasattr(RuntimeStatus, "RATE_LIMITED")
+                else RuntimeStatus.ERROR
+            )
+
         return RuntimeResponse(
             status=status,
             result_text=result.get("result_text", ""),
@@ -101,6 +108,7 @@ class LLMRuntimeAdapter:
             tokens_out=result.get("tokens_out", 0),
             error_message=result.get("error_message", ""),
             runtime_name=f"{provider.name}",
+            raw=result,
         )
 
     async def execute_streaming(
