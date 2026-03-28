@@ -1,0 +1,6 @@
+{
+  "brain_layer_runtime": "ollama",
+  "brain_layer_model": "deepseek-v3.2:cloud",
+  "execution_layer_runtime": "ollama",
+  "execution_layer_model": "deepseek-v3.2:cloud"
+}
