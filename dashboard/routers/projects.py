@@ -45,8 +45,8 @@ async def list_projects():
     try:
         if _del_file.exists():
             deleted_ids = set(json.loads(_del_file.read_text()))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(e)  # pass
 
     active_managers = state.get_all_managers()
 
@@ -583,23 +583,17 @@ async def create_project(req: CreateProjectRequest):
     from config import CLAUDE_PROJECTS_ROOT, PROJECTS_BASE_DIR, SANDBOX_ENABLED
 
     resolved_dir = Path(project_dir).resolve()
-    home = Path.home().resolve()
-    projects_base = PROJECTS_BASE_DIR.resolve()
-    allowed_roots = [home, projects_base]
+    # Allow: CLAUDE_PROJECTS_ROOT, PROJECTS_BASE_DIR, or home directory
+    allowed_roots = [
+        Path(CLAUDE_PROJECTS_ROOT).resolve(),
+        Path(PROJECTS_BASE_DIR).resolve(),
+        Path.home().resolve(),
+    ]
     if not any(resolved_dir.is_relative_to(root) for root in allowed_roots):
         return _problem(
             403,
-            "Project directory must be within your home directory or configured projects base.",
+            f"Project directory must be within allowed roots: {allowed_roots}",
         )
-
-    if SANDBOX_ENABLED:
-        dir_resolved = str(resolved_dir)
-        root_resolved = str(Path(CLAUDE_PROJECTS_ROOT).resolve())
-        if not dir_resolved.startswith(root_resolved + "/") and dir_resolved != root_resolved:
-            return _problem(
-                400,
-                f"Project directory must be inside {CLAUDE_PROJECTS_ROOT}",
-            )
 
     try:
         os.makedirs(project_dir, exist_ok=True)
@@ -671,8 +665,8 @@ async def create_project(req: CreateProjectRequest):
             if project_id in deleted_ids:
                 deleted_ids.remove(project_id)
                 _deleted_file.write_text(json.dumps(deleted_ids))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(e)  # pass
 
     manager = _create_web_manager(
         project_id=project_id,
@@ -717,8 +711,8 @@ async def delete_project(project_id: str):
         if project_id not in deleted_ids:
             deleted_ids.append(project_id)
         _deleted_file.write_text(json.dumps(deleted_ids))
-    except Exception:
-        logger.warning("Could not persist deleted project ID %s", project_id)
+    except Exception as e:
+        logger.exception(e)  # logger.warning("Could not persist deleted project
 
     await event_bus.publish(
         {

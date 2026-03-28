@@ -471,7 +471,9 @@ USE_DAG_EXECUTOR: bool = _get("USE_DAG_EXECUTOR", "true", str).lower() == "true"
 # ── Project Sandboxing ──────────────────────────────────────────────────────
 _raw_sandbox = os.getenv("SANDBOX_ENABLED", "true")
 SANDBOX_ENABLED: bool = _raw_sandbox.lower() not in ("0", "false", "no", "off")
-CLAUDE_PROJECTS_ROOT: str = str(Path.home() / "claude-projects")  # Hard boundary
+# Hard boundary - must be inside this directory when SANDBOX_ENABLED
+# Defaults to same as PROJECTS_BASE_DIR for convenience
+CLAUDE_PROJECTS_ROOT: str = os.getenv("CLAUDE_PROJECTS_ROOT", str(PROJECTS_BASE_DIR))
 
 # ── Parallel task queue ──────────────────────────────────────────────
 # Previously read via os.getenv() inside src/workers/task_queue.py (H-3 fix).

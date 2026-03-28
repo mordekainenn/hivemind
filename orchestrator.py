@@ -355,18 +355,23 @@ class OrchestratorManager:
         mode: str = "autonomous",
     ):
         self.project_name = project_name
-        # Resolve to absolute path and validate it's inside CLAUDE_PROJECTS_ROOT
-        from config import CLAUDE_PROJECTS_ROOT, SANDBOX_ENABLED
+        # Resolve to absolute path and validate it's inside allowed roots
+        from config import CLAUDE_PROJECTS_ROOT, PROJECTS_BASE_DIR, SANDBOX_ENABLED
 
         project_dir_resolved = str(Path(project_dir).resolve())
         if SANDBOX_ENABLED:
-            root_resolved = str(Path(CLAUDE_PROJECTS_ROOT).resolve())
-            if (
-                not project_dir_resolved.startswith(root_resolved + "/")
-                and project_dir_resolved != root_resolved
+            # Allow: CLAUDE_PROJECTS_ROOT, PROJECTS_BASE_DIR, or home directory
+            allowed_roots = [
+                str(Path(CLAUDE_PROJECTS_ROOT).resolve()),
+                str(Path(PROJECTS_BASE_DIR).resolve()),
+                str(Path.home().resolve()),
+            ]
+            if not any(
+                project_dir_resolved.startswith(r + "/") or project_dir_resolved == r
+                for r in allowed_roots
             ):
                 raise ValueError(
-                    f"Project directory {project_dir!r} is outside allowed root {CLAUDE_PROJECTS_ROOT!r}"
+                    f"Project directory {project_dir!r} must be inside one of: {allowed_roots}"
                 )
         self.project_dir = project_dir_resolved
         self.sdk = sdk
