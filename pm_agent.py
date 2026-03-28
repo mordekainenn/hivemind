@@ -361,8 +361,7 @@ async def create_task_graph(
             if on_stream:
                 try:
                     await on_stream(text)
-                except Exception:
-                    pass  # never let stream callback break PM execution
+                except Exception as e: logger.exception(e)  # pass  # never let stream callback break PM executi
 
         # PM runs via isolated_query so anyio's cleanup is contained in its own
         # thread/event-loop and never injects CancelledError into the main loop.
@@ -530,8 +529,7 @@ def _build_pm_prompt(
         )
         if _git.returncode == 0 and _git.stdout.strip():
             parts.append(f"<recent_git_log>\n{_git.stdout.strip()}\n</recent_git_log>")
-    except Exception:
-        logger.debug("git log collection failed (non-critical)", exc_info=True)
+    except Exception as e: logger.exception(e)  # logger.debug("git log collection failed (non-criti
 
     parts.append(
         "\nCreate the TaskGraph JSON now. Output ONLY the raw JSON object.\n"

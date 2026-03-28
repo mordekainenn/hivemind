@@ -115,8 +115,7 @@ class AnthropicRuntime:
                     match = re.search(r"retry.?after.*?(\d+)", error_str)
                     if match:
                         retry_after = int(match.group(1))
-                except:
-                    pass
+                except Exception as e: logger.exception(e)  # pass
 
             logger.error(f"Anthropic error: {e}")
             return {
@@ -261,5 +260,4 @@ class AnthropicRuntime:
         try:
             models = await self.list_models()
             return len(models) > 0
-        except Exception:
-            return False
+        except Exception as e: logger.exception(e)  # return False

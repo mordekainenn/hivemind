@@ -340,8 +340,7 @@ def _parse_architect_response(raw_text: str, project_id: str) -> ArchitectureBri
             data = json.loads(candidate)
             data.setdefault("project_id", project_id)
             return ArchitectureBrief(**data)
-        except Exception:
-            continue
+        except Exception as e: logger.exception(e)  # continue
 
     # Fallback: return empty brief
     logger.warning("[Architect] Could not parse response, returning empty brief")

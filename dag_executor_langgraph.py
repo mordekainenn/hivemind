@@ -129,8 +129,8 @@ def _fire_event(on_event: Callable | None, event: dict) -> None:
             _task = asyncio.ensure_future(on_event(event))
             _background_event_tasks.add(_task)
             _task.add_done_callback(_background_event_tasks.discard)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to fire event: %s", e)
 
 
 def _make_step_description(milestone: str, task_name: str) -> str:
@@ -182,8 +182,8 @@ def _emit_task_progress(
             event["task_name"] = task_name[:120]
         event["step_description"] = _make_step_description(milestone, task_name)
         _fire_event(on_event, event)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to emit task progress: %s", e)
 
 
 def _emit_dag_progress(
@@ -213,8 +213,8 @@ def _emit_dag_progress(
             est_remaining_s=est_remaining,
         )
         _fire_event(on_event, event)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to emit DAG progress: %s", e)
 
 
 def _emit_activity_log(
@@ -293,7 +293,8 @@ class FileLockManager:
                 except TimeoutError:
                     self._release_paths(acquired)
                     return False
-        except Exception:
+        except Exception as e:
+            logger.error("Failed to acquire file locks: %s", e)
             self._release_paths(acquired)
             raise
         return True
@@ -369,8 +370,8 @@ def _get_checkpoint_db(project_dir: str) -> str:
         """)
         conn.commit()
         conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to initialize checkpoint DB: %s", e)
     return db_path
 
 
@@ -395,8 +396,8 @@ def _save_checkpoint(project_dir: str, checkpoint: DAGCheckpoint) -> None:
         )
         conn.commit()
         conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(e)  # pass
 
 
 def _load_latest_checkpoint(project_dir: str, project_id: str) -> DAGCheckpoint | None:
@@ -410,8 +411,8 @@ def _load_latest_checkpoint(project_dir: str, project_id: str) -> DAGCheckpoint 
         conn.close()
         if row:
             return DAGCheckpoint.model_validate_json(row[0])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to load checkpoint: %s", e)
     return None
 
 
@@ -422,8 +423,8 @@ def _clear_checkpoints(project_dir: str, project_id: str) -> None:
         conn.execute("DELETE FROM dag_checkpoints WHERE project_id = ?", (project_id,))
         conn.commit()
         conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(e)  # pass
 
 
 async def _async_save_checkpoint(project_dir: str, checkpoint: DAGCheckpoint) -> None:
@@ -510,8 +511,8 @@ async def _git_status(project_dir: str, task_id: str, stage: str) -> str:
             except (ProcessLookupError, OSError):
                 pass
         return ""
-    except Exception:
-        return ""
+    except Exception as e:
+        logger.exception(e)  # return ""
 
 
 async def _get_git_diff_for_review(project_dir: str) -> str:
@@ -549,8 +550,8 @@ async def _get_git_diff_for_review(project_dir: str) -> str:
         if last_hunk > _REVIEW_DIFF_CHAR_LIMIT // 2:
             truncated = truncated[:last_hunk]
         return truncated + f"\n... [diff truncated — {len(raw)} total chars]"
-    except Exception:
-        return ""
+    except Exception as e:
+        logger.exception(e)  # return ""
 
 
 # ── Symbol extraction ────────────────────────────────────────────────────
@@ -587,7 +588,8 @@ async def _extract_symbols_from_diff(project_dir: str, artifacts: list[str]) -> 
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=cfg.SUBPROCESS_SHORT_TIMEOUT)
         diff_text = stdout.decode("utf-8", errors="replace")
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to extract symbols from diff: %s", e)
         return ""
     if not diff_text:
         return ""
@@ -642,8 +644,8 @@ async def _scan_codebase_symbols(project_dir: str) -> str:
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
         all_files = stdout.decode("utf-8", errors="replace").strip().split("\n")
-    except Exception:
-        return ""
+    except Exception as e:
+        logger.exception(e)  # return ""
 
     _SKIP_DIRS = {
         "node_modules",
@@ -673,7 +675,8 @@ async def _scan_codebase_symbols(project_dir: str) -> str:
         full_path = Path(project_dir) / fpath
         try:
             content = full_path.read_text(encoding="utf-8", errors="replace")
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to read file %s: %s", fpath, e)
             continue
         symbols = []
         for line in content.split("\n"):
@@ -930,8 +933,8 @@ async def select_batch(state: DAGState) -> dict:
     codebase_symbols = ""
     try:
         codebase_symbols = await _scan_codebase_symbols(state["project_dir"])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(e)  # pass
 
     logger.info(
         f"[LG-DAG] Round {round_num}: "
@@ -1053,8 +1056,8 @@ async def _run_summary_phase(
 
         if summary_response is None:
             return None
-    except Exception:
-        return None
+    except Exception as e:
+        logger.exception(e)  # return None
 
     if summary_response.is_error:
         return None
@@ -1181,8 +1184,8 @@ async def execute_batch(state: DAGState) -> dict:
         if on_task_start:
             try:
                 await on_task_start(task)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(e)  # pass
 
         # Milestone 1: preparing
         _task_start_mono = time.monotonic()
@@ -1221,16 +1224,16 @@ async def execute_batch(state: DAGState) -> dict:
             _boundary = build_project_header(graph.project_id, project_dir)
             if _boundary and _boundary not in system_prompt:
                 system_prompt = _boundary + "\n\n" + system_prompt
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(e)  # pass
 
         # Skills injection
         try:
             skill_names = select_skills_for_task(role_name, task.goal)
             if skill_names:
                 system_prompt = system_prompt + build_skill_prompt(skill_names)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(e)  # pass
 
         # JIT Context from artifact registry
         if artifact_registry:
@@ -1238,8 +1241,8 @@ async def execute_batch(state: DAGState) -> dict:
                 enhanced = artifact_registry.enhance_prompt(task, prompt)
                 if enhanced != prompt:
                     prompt = enhanced
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(e)  # pass
 
         # Blackboard context
         if blackboard:
@@ -1249,7 +1252,8 @@ async def execute_batch(state: DAGState) -> dict:
                 )
                 if bb_ctx:
                     prompt += f"\n\n{bb_ctx}"
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to build blackboard context: %s", e)
                 if structured_notes:
                     try:
                         notes_ctx = structured_notes.build_notes_context(
@@ -1257,8 +1261,8 @@ async def execute_batch(state: DAGState) -> dict:
                         )
                         if notes_ctx:
                             prompt += f"\n\n{notes_ctx}"
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(e)
         elif structured_notes:
             try:
                 notes_ctx = structured_notes.build_notes_context(
@@ -1266,8 +1270,8 @@ async def execute_batch(state: DAGState) -> dict:
                 )
                 if notes_ctx:
                     prompt += f"\n\n{notes_ctx}"
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(e)  # pass
 
         # Codebase symbol map
         codebase_symbols = state.get("codebase_symbols", "")
@@ -1293,8 +1297,8 @@ async def execute_batch(state: DAGState) -> dict:
                         f"{_diff}\n"
                         "</code_diff>"
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(e)  # pass
 
         # Two-Phase: reserve turns for summary
         work_turns = max(max_turns - _SUMMARY_PHASE_TURNS, max_turns // 2)
@@ -1356,8 +1360,8 @@ async def execute_batch(state: DAGState) -> dict:
                 try:
                     _write_log(f"STREAM: {text[:500]}")
                     await on_agent_stream(role_name, text, task.id)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.exception(e)  # pass
         else:
 
             async def _on_stream(text):
@@ -1379,8 +1383,8 @@ async def execute_batch(state: DAGState) -> dict:
                             task_name=_task_goal,
                         )
                     await on_agent_tool_use(role_name, tool_name, tool_info, task.id)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.exception(e)  # pass
         else:
 
             async def _on_tool_use(tool_name, tool_info="", tool_input=None):
@@ -1439,8 +1443,8 @@ async def execute_batch(state: DAGState) -> dict:
             if on_task_done:
                 try:
                     await on_task_done(task, output)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(e)
             return output
         except Exception as e:
             logger.error(f"[LG-DAG] Task {task.id}: exception: {e}", exc_info=True)
@@ -1456,8 +1460,8 @@ async def execute_batch(state: DAGState) -> dict:
             if on_task_done:
                 try:
                     await on_task_done(task, output)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(e)
             return output
 
         # Extract work phase data
@@ -1567,16 +1571,16 @@ async def execute_batch(state: DAGState) -> dict:
         if output.is_successful() and artifact_registry:
             try:
                 artifact_registry.register(output)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(e)  # pass
 
         # Blackboard file ownership
         if output.is_successful() and output.artifacts and blackboard:
             try:
                 for art_path in output.artifacts:
                     blackboard.register_file_ownership(art_path, task.id)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(e)  # pass
 
         # Reflexion
         try:
@@ -1602,10 +1606,10 @@ async def execute_batch(state: DAGState) -> dict:
                             author_task_id=task.id,
                             tags=[task.id, "reflexion"],
                         )
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+                    except Exception as e:
+                        logger.exception(e)  # pass
+        except Exception as e:
+            logger.exception(e)  # pass
 
         # Structured notes
         if structured_notes:
@@ -1632,8 +1636,8 @@ async def execute_batch(state: DAGState) -> dict:
                             author_task_id=task.id,
                             tags=[task.id, role_name],
                         )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(e)  # pass
 
         # Symbol extraction
         if output.is_successful() and output.artifacts and structured_notes:
@@ -1648,8 +1652,8 @@ async def execute_batch(state: DAGState) -> dict:
                         author_task_id=task.id,
                         tags=[task.id, role_name, "symbols"],
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(e)  # pass
 
         # Dynamic DAG: discovered tasks
         if output.is_successful() and output.discovered_tasks:
@@ -1662,8 +1666,8 @@ async def execute_batch(state: DAGState) -> dict:
                     state["task_counter"],
                     on_event,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(e)  # pass
 
         # Detect max_turns exhaustion
         total_turns = max_turns
@@ -1703,8 +1707,8 @@ async def execute_batch(state: DAGState) -> dict:
             from dashboard.events import task_progress_throttler
 
             task_progress_throttler.reset(f"tp:{task.id}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(e)  # pass
 
         logger.info(
             f"[LG-DAG] Task {task.id} ({role_name}): "
@@ -1721,8 +1725,8 @@ async def execute_batch(state: DAGState) -> dict:
                 done_tasks = sum(1 for t in graph.tasks if t.id in completed) + 1
                 output.progress = f"{done_tasks}/{total_tasks}"
                 await on_task_done(task, output)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(e)  # pass
 
         # DAG_PROGRESS event
         _done_count = sum(1 for t in graph.tasks if t.id in completed) + 1
@@ -1874,8 +1878,8 @@ async def post_batch(state: DAGState) -> dict:
                     f"Files: {', '.join(result.artifacts[:5]) if result.artifacts else 'none'}"
                 )
                 _commit_approved = await commit_approval_callback(desc)
-            except Exception:
-                _commit_approved = True
+            except Exception as e:
+                logger.exception(e)  # _commit_approved = True
 
         if _commit_approved:
             try:
@@ -1889,8 +1893,8 @@ async def post_batch(state: DAGState) -> dict:
                 )
                 if committed:
                     logger.info(f"[LG-DAG] Task {result.task_id} committed: {committed}")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(e)  # pass
 
     # Fallback round commit
     _round_approved = True
@@ -1899,16 +1903,16 @@ async def post_batch(state: DAGState) -> dict:
             _round_approved = await commit_approval_callback(
                 f"Round {state['round_num']} completed. Commit remaining changes?"
             )
-        except Exception:
-            _round_approved = True
+        except Exception as e:
+            logger.exception(e)  # _round_approved = True
 
     if _round_approved:
         try:
             successful = [r for r in batch_results if r.is_successful()]
             if successful:
                 await executor_commit(project_dir, successful, state["round_num"])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(e)  # pass
 
     # Handle failures — retry, model switch, or remediation
     new_healing = []
@@ -1964,8 +1968,8 @@ async def post_batch(state: DAGState) -> dict:
                         }
                     )
                     continue
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(e)  # pass
 
         # Remediation
         if remediation_allowed and new_remediation_count < MAX_TOTAL_REMEDIATIONS:
@@ -1992,8 +1996,8 @@ async def post_batch(state: DAGState) -> dict:
                     if on_remediation:
                         try:
                             await on_remediation(task, result, remediation)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.exception(e)  # pass
 
     # Remove tasks that need retry from completed
     uncomplete_map = {}
@@ -2018,8 +2022,8 @@ async def post_batch(state: DAGState) -> dict:
             status="running",
         )
         await _async_save_checkpoint(project_dir, checkpoint)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(e)  # pass
 
     # Determine status
     if graph.is_complete(completed):
@@ -2069,8 +2073,8 @@ async def review_code(state: DAGState) -> dict:
         )
         if head_result.returncode == 0:
             pre_review_head = head_result.stdout.strip()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(e)  # pass
 
     py_files = []
     for root, dirs, filenames in os.walk(project_dir):
@@ -2086,8 +2090,8 @@ async def review_code(state: DAGState) -> dict:
                     with open(fpath) as f:
                         content = f.read()
                     py_files.append((os.path.relpath(fpath, project_dir), content))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.exception(e)  # pass
 
     if not py_files:
         return {}
@@ -2118,8 +2122,8 @@ async def review_code(state: DAGState) -> dict:
         _boundary = build_project_header(state["graph"].project_id, project_dir)
         if _boundary and _boundary not in system_prompt:
             system_prompt = _boundary + "\n\n" + system_prompt
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(e)  # pass
 
     review_notes: list[str] = []
     review_cost = 0.0
@@ -2188,8 +2192,8 @@ async def review_code(state: DAGState) -> dict:
                 text=True,
             )
             has_review_commit = True
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(e)  # pass
 
     # ── Test-After-Review: verify lint/format didn't break anything ──
     if has_review_commit and pre_review_head:
@@ -2363,7 +2367,8 @@ async def execute_graph(
         from blackboard import Blackboard
 
         _blackboard = Blackboard(_structured_notes)
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to initialize blackboard: %s", e)
         _blackboard = None
     _artifact_registry = ArtifactRegistry(project_dir)
     _dynamic_spawner = DynamicSpawner()
@@ -2432,8 +2437,8 @@ async def execute_graph(
     # Save artifact manifest
     try:
         _artifact_registry.save_manifest()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(e)  # pass
 
     # Final checkpoint
     _final_status = "completed" if final_state["status"] == "completed" else "interrupted"
@@ -2455,8 +2460,8 @@ async def execute_graph(
         await _async_save_checkpoint(project_dir, checkpoint)
         if _final_status == "completed":
             _clear_checkpoints(project_dir, graph.project_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(e)  # pass
 
     # Build result
     completed = final_state["completed"]

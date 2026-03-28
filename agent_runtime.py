@@ -168,19 +168,18 @@ class ClaudeCodeRuntime:
         start = time.monotonic()
         try:
             response = await isolated_query(
+                sdk=None,  # Will be created inside isolated_query
                 prompt=prompt,
-                working_dir=working_dir,
-                role=role,
+                cwd=working_dir,
                 max_turns=max_turns,
-                timeout=timeout,
-                budget_tokens=budget_usd,
+                max_budget_usd=budget_usd,
                 system_prompt=system_prompt,
             )
             elapsed = time.monotonic() - start
 
             return RuntimeResponse(
                 status=RuntimeStatus.SUCCESS if not response.is_error else RuntimeStatus.ERROR,
-                result_text=response.result_text,
+                result_text=response.text,
                 cost_usd=response.cost_usd,
                 duration_seconds=elapsed,
                 tokens_in=response.input_tokens,
@@ -221,7 +220,8 @@ class ClaudeCodeRuntime:
                 timeout=10,
             )
             return result.returncode == 0
-        except Exception:
+        except Exception as e:
+            logger.exception(e)
             return False
 
     async def shutdown(self) -> None:
@@ -363,7 +363,8 @@ class OpenClawRuntime:
                 timeout=10,
             )
             return result.returncode == 0
-        except Exception:
+        except Exception as e:
+            logger.exception(e)
             return False
 
     async def shutdown(self) -> None:
@@ -645,6 +646,7 @@ async def check_all_runtimes() -> dict[str, bool]:
     for key, runtime in AVAILABLE_RUNTIMES.items():
         try:
             results[key] = await runtime.health_check()
-        except Exception:
+        except Exception as e:
+            logger.warning("Health check failed for %s: %s", key, e)
             results[key] = False
     return results

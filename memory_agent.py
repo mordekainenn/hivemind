@@ -281,8 +281,7 @@ def _parse_memory_response(
             data = json.loads(candidate)
             data.setdefault("project_id", project_id)
             return MemorySnapshot(**data)
-        except Exception:
-            continue
+        except Exception as e: logger.exception(e)  # continue
 
     # Fallback: return existing or empty
     logger.warning("[Memory] Could not parse LLM response, returning existing/empty snapshot")
@@ -479,8 +478,8 @@ def _atomic_write(path: Path, content: str, encoding: str = "utf-8") -> None:
     try:
         tmp_path.write_text(content, encoding=encoding)
         os.replace(tmp_path, path)
-    except Exception:
-        # Best-effort cleanup of the .tmp file on failure
+    except Exception as e:
+        logger.exception(e)  # Best-effort cleanup of the .tmp file on failure
         tmp_path.unlink(missing_ok=True)
         raise
 

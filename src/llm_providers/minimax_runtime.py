@@ -257,5 +257,4 @@ class MinimaxRuntime:
         try:
             models = await self.list_models()
             return len(models) > 0
-        except Exception:
-            return False
+        except Exception as e: logger.exception(e)  # return False

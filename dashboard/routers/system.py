@@ -97,8 +97,7 @@ async def health_check():
         }
     except ImportError:
         pass
-    except Exception:
-        logger.debug("Memory info collection failed", exc_info=True)
+    except Exception as e: logger.exception(e)  # logger.debug("Memory info collection failed", exc_
 
     active_count = sum(len(sessions) for sessions in state.active_sessions.values())
 

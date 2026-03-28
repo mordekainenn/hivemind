@@ -123,8 +123,7 @@ async def detect_file_changes(mgr) -> str:
             return diff_out.strip()
         status_out = await _git("status", "--short")
         return status_out.strip() or "(no file changes detected)"
-    except Exception:
-        return "(unable to detect changes)"
+    except Exception as e: logger.exception(e)  # return "(unable to detect changes)"
 
 
 _ACTUAL_DIFF_CHAR_LIMIT = 12000

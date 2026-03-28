@@ -311,14 +311,12 @@ def _manager_to_dict(manager, project_id: str) -> dict:
                     "running": running,
                     "percent": round(completed / total * 100) if total else 0,
                 }
-    except Exception:
-        logger.debug("DAG progress extraction failed for %s", project_id, exc_info=True)
+    except Exception as e: logger.exception(e)  # logger.debug("DAG progress extraction failed for %
 
     diagnostics = None
     try:
         diagnostics = event_bus.get_diagnostics(project_id)
-    except Exception:
-        logger.debug("EventBus diagnostics unavailable for %s", project_id, exc_info=True)
+    except Exception as e: logger.exception(e)  # logger.debug("EventBus diagnostics unavailable for
 
     return {
         "project_id": project_id,

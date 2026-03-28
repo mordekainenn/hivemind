@@ -15,8 +15,7 @@ _OVERRIDES_PATH = Path("data/settings_overrides.json")
 if _OVERRIDES_PATH.exists():
     try:
         _OVERRIDES = json.loads(_OVERRIDES_PATH.read_text())
-    except Exception:
-        _OVERRIDES = {}
+    except Exception as e: logger.exception(e)  # _OVERRIDES = {}
 else:
     _OVERRIDES = {}
 

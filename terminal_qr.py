@@ -34,7 +34,8 @@ def _print_qr_terminal(url: str) -> bool:
         qr.add_data(url)
         qr.make(fit=True)
         matrix = qr.get_matrix()
-    except Exception:
+    except Exception as e:
+        logger.exception(e)
         return False
 
     # Render using Unicode upper/lower half-block characters.

@@ -110,8 +110,7 @@ class OpenAIRuntime:
                     match = re.search(r"retry.?after.*?(\d+)", error_str)
                     if match:
                         retry_after = int(match.group(1))
-                except:
-                    pass
+                except Exception as e: logger.exception(e)  # pass
 
             logger.error(f"OpenAI error: {e}")
             return {
@@ -232,15 +231,13 @@ class OpenAIRuntime:
             client = openai.AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
             response = await client.models.list()
             return [m.id for m in response.data if "gpt" in m.id or "o1" in m.id]
-        except Exception:
-            return []
+        except Exception as e: logger.exception(e)  # return []
 
     async def health_check(self) -> bool:
         try:
             models = await self.list_models()
             return len(models) > 0
-        except Exception:
-            return False
+        except Exception as e: logger.exception(e)  # return False
 
     def _build_messages(
         self, prompt: str, system_prompt: str, context_files: list[str] | None

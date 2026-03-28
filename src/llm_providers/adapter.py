@@ -171,8 +171,7 @@ class LLMRuntimeAdapter:
         try:
             provider = self._registry.get(self.provider_name)
             return await provider.health_check()
-        except Exception:
-            return False
+        except Exception as e: logger.exception(e)  # return False
 
     async def shutdown(self) -> None:
         pass

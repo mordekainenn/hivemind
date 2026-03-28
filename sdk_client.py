@@ -234,8 +234,8 @@ def _snapshot_claude_pids() -> set[int]:
             except ValueError:
                 continue
         return pids
-    except Exception:
-        return set()
+    except Exception as e:
+        logger.exception(e)  # return set()
 
 
 # Use the Claude CLI binary. Resolution order:
@@ -259,7 +259,8 @@ def _cli_works(path: str) -> bool:
             env={**os.environ, "CLAUDECODE": ""},
         )
         return r.returncode == 0
-    except Exception:
+    except Exception as e:
+        logger.exception(e)
         return False
 
 

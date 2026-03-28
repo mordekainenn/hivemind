@@ -377,8 +377,8 @@ async def run():
 
                                 print("  📱 Scan to open on any device:")
                                 print_qr_for_url(url)
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.debug(e)
                             logger.info("")
                     # suppress verbose cloudflared debug lines
             except FileNotFoundError:
@@ -430,8 +430,7 @@ async def run():
 
         print("  📱 Scan to open on your phone:")
         print_qr_for_url(qr_url)
-    except Exception:
-        pass  # QR is a nice-to-have, never block startup
+    except Exception as e: logger.exception(e)  # pass  # QR is a nice-to-have, never block startup
 
     print(flush=True)
 

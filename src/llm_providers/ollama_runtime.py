@@ -348,8 +348,7 @@ class OllamaRuntime:
     async def health_check(self) -> bool:
         try:
             return len(await self.list_models()) >= 0
-        except Exception:
-            return False
+        except Exception as e: logger.exception(e)  # return False
 
     def _build_prompt(
         self, prompt: str, system_prompt: str, context_files: list[str] | None
@@ -402,7 +401,6 @@ To use a tool, output a JSON object in this format:
                             break
                 except (json.JSONDecodeError, KeyError, IndexError):
                     continue
-        except Exception:
-            pass
+        except Exception as e: logger.exception(e)  # pass
 
         return tool_calls

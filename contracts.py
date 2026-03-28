@@ -1299,8 +1299,7 @@ def extract_task_output(
             data = json.loads(match.group(1).strip())
             data.setdefault("task_id", task_id)
             return TaskOutput(**data)
-        except Exception:
-            continue
+        except Exception as e: logger.exception(e)  # continue
 
     # ── Step 2: Try last JSON object in text ──
     start = raw_text.rfind("{")
@@ -1316,8 +1315,7 @@ def extract_task_output(
                         data = json.loads(raw_text[start : i + 1])
                         data.setdefault("task_id", task_id)
                         return TaskOutput(**data)
-                    except Exception:
-                        break
+                    except Exception as e: logger.exception(e)  # break
 
     # ── Step 3: Multi-signal work detection ──
     # Instead of a naive keyword list, we score multiple independent signals.
