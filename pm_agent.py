@@ -42,6 +42,16 @@ from org_hierarchy import build_org_prompt_section
 
 logger = logging.getLogger(__name__)
 
+
+class RateLimitError(Exception):
+    """Raised when an LLM provider hits a rate limit or quota."""
+
+    def __init__(self, message: str, retry_after: int | None = None):
+        super().__init__(message)
+        self.message = message
+        self.retry_after = retry_after
+
+
 # ---------------------------------------------------------------------------
 # PM System Prompt
 # ---------------------------------------------------------------------------
@@ -361,7 +371,8 @@ async def create_task_graph(
             if on_stream:
                 try:
                     await on_stream(text)
-                except Exception as e: logger.exception(e)  # pass  # never let stream callback break PM executi
+                except Exception as e:
+                    logger.exception(e)  # pass  # never let stream callback break PM executi
 
         # PM runs via isolated_query so anyio's cleanup is contained in its own
         # thread/event-loop and never injects CancelledError into the main loop.
@@ -459,6 +470,15 @@ async def _create_task_graph_with_provider(
                 budget_usd=_pm_cfg.budget,
             )
 
+            # Check for rate limit first - raise immediately so user gets notified
+            from agent_runtime import RuntimeStatus
+
+            if result.status == RuntimeStatus.RATE_LIMITED:
+                raise RateLimitError(
+                    f"Rate limit exceeded by {result.runtime_name}: {result.error_message}",
+                    retry_after=getattr(result, "retry_after", None),
+                )
+
             if on_stream and result.result_text:
                 await on_stream(result.result_text)
 
@@ -474,6 +494,8 @@ async def _create_task_graph_with_provider(
 
             last_error = error
 
+        except RateLimitError:
+            raise  # Re-raise rate limits immediately
         except Exception as e:
             logger.error(f"[PM] LLM provider error: {e}")
             last_error = str(e)
@@ -529,7 +551,8 @@ def _build_pm_prompt(
         )
         if _git.returncode == 0 and _git.stdout.strip():
             parts.append(f"<recent_git_log>\n{_git.stdout.strip()}\n</recent_git_log>")
-    except Exception as e: logger.exception(e)  # logger.debug("git log collection failed (non-criti
+    except Exception as e:
+        logger.exception(e)  # logger.debug("git log collection failed (non-criti
 
     parts.append(
         "\nCreate the TaskGraph JSON now. Output ONLY the raw JSON object.\n"

@@ -54,6 +54,7 @@ class RuntimeStatus(Enum):
     ERROR = "error"
     TIMEOUT = "timeout"
     CANCELLED = "cancelled"
+    RATE_LIMITED = "rate_limited"
 
 
 @dataclass

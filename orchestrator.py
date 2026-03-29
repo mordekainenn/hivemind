@@ -2175,6 +2175,24 @@ class OrchestratorManager:
                         logger.info(f"  Task {t.id}: {t.role.value} — {t.goal[:80]}{deps}")
                 except Exception as pm_err:
                     _pm_elapsed = _pm_time.time() - _pm_start
+
+                    # Check if this is a rate limit error - notify user and stop gracefully
+                    from pm_agent import RateLimitError
+
+                    if isinstance(pm_err, RateLimitError):
+                        logger.error(f"[{self.project_id}] Rate limit hit: {pm_err.message}")
+                        await self._send_result(
+                            f"⚠️ **Rate Limit Exceeded**\n\n"
+                            f"{pm_err.message}\n\n"
+                            f"Please wait a moment and try again, or switch to a different provider/model."
+                        )
+                        # Signal completion with error state
+                        await self._emit_event(
+                            "session_error", error_type="rate_limit", message=str(pm_err)
+                        )
+                        return
+
+                    # For other errors, try fallback graph
                     logger.warning(
                         f"[{self.project_id}] PM Agent failed after {_pm_elapsed:.1f}s: {pm_err}. Using fallback."
                     )
